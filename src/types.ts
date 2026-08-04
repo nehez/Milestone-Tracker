@@ -74,7 +74,21 @@ export interface DisplayOptions {
   showPercentComplete: boolean;
   milestonesOnly: boolean;
   visibleExtraFields: string[];
+  /** Alternating background bands tying each swimlane's rows back to its header. */
+  laneBands: boolean;
+  /** The two colors alternated across lanes when laneBands is on. */
+  laneBandColors: [string, string];
 }
+
+export const DEFAULT_LANE_BAND_COLORS: [string, string] = ["#ffffff", "#f6f8fa"];
+
+/** Preset pairs offered in Display options, alongside a free-form color picker. */
+export const LANE_BAND_PRESETS: { label: string; colors: [string, string] }[] = [
+  { label: "Subtle gray", colors: ["#ffffff", "#f6f8fa"] },
+  { label: "Cool blue", colors: ["#ffffff", "#eff6ff"] },
+  { label: "Warm sand", colors: ["#ffffff", "#fdf6ec"] },
+  { label: "Mint", colors: ["#ffffff", "#effaf3"] },
+];
 
 export interface AppSettings {
   displayOptions: DisplayOptions;

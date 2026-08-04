@@ -15,6 +15,7 @@ import {
 import { parseExcelFile } from "./excel";
 import { guessMapping, headerSignature } from "./columnMapping";
 import { buildMilestones, latestEntry } from "./milestones";
+import { DEFAULT_LANE_BAND_COLORS } from "../types";
 import type { AppSettings, ColumnMapping, DisplayOptions, Snapshot } from "../types";
 
 const DEFAULT_DISPLAY_OPTIONS: DisplayOptions = {
@@ -26,6 +27,8 @@ const DEFAULT_DISPLAY_OPTIONS: DisplayOptions = {
   // it immediately does the filtering they want instead of showing every task.
   milestonesOnly: true,
   visibleExtraFields: [],
+  laneBands: true,
+  laneBandColors: DEFAULT_LANE_BAND_COLORS,
 };
 
 export interface PendingUpload {
@@ -54,7 +57,8 @@ export function useAppData() {
         loadOverrides(),
       ]);
       setSnapshots(snaps);
-      if (settings) setDisplayOptions(settings.displayOptions);
+      // Merge over defaults so settings saved before a new option existed still load.
+      if (settings) setDisplayOptions({ ...DEFAULT_DISPLAY_OPTIONS, ...settings.displayOptions });
       setOverrides(Object.fromEntries(savedOverrides.map((o) => [o.uid, o.visible])));
 
       const uniqueSignatures = new Set(
@@ -161,6 +165,11 @@ export function useAppData() {
     return [...set];
   }, [mappings]);
 
+  const hasSwimlanes = useMemo(
+    () => Object.values(mappings).some((m) => Boolean(m.roles.group)),
+    [mappings]
+  );
+
   /** One row per unique UID for the "Manage milestones" picker, using each milestone's most recent snapshot. */
   const milestoneSummaries = useMemo(
     () =>
@@ -186,6 +195,7 @@ export function useAppData() {
     milestones,
     milestoneSummaries,
     allExtraFields,
+    hasSwimlanes,
     displayOptions,
     updateDisplayOptions,
     overrides,

@@ -126,6 +126,8 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
   }, [markers, pxPerDay, domain.start]);
 
   const isGrouped = lanes.length > 0 && lanes[0].label !== null;
+  const laneBandColor = (i: number) =>
+    displayOptions.laneBands ? displayOptions.laneBandColors[i % 2] : undefined;
   const svgHeight = (lanes.length ? lanes[lanes.length - 1].top + lanes[lanes.length - 1].height : HEADER_HEIGHT) + 8;
 
   const ticks = useMemo(() => monthTicks(domain.start, domain.end), [domain]);
@@ -177,13 +179,23 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
         {isGrouped && (
           <div className="w-32 flex-shrink-0 border-r border-line" style={{ width: LANE_LABEL_WIDTH }}>
             <div style={{ height: HEADER_HEIGHT }} />
-            {lanes.map((lane) => (
+            {lanes.map((lane, i) => (
               <div
                 key={lane.key}
-                style={{ height: lane.height }}
-                className="flex items-center border-t border-line px-3 text-xs font-medium text-slate first:border-t-0"
+                style={{
+                  height: lane.height,
+                  backgroundColor: laneBandColor(i),
+                }}
+                className="relative border-t border-line first:border-t-0"
               >
-                <span className="truncate" title={lane.label ?? ""}>
+                {/* Positioned to sit exactly on the lane's baseline (LANE_BASELINE_PAD from the
+                    lane top), matching where markers actually sit, rather than centered in the
+                    lane's full height (which is mostly label whitespace below the baseline). */}
+                <span
+                  className="absolute left-3 -translate-y-1/2 truncate text-xs font-medium text-slate"
+                  style={{ top: LANE_BASELINE_PAD, width: LANE_LABEL_WIDTH - 24 }}
+                  title={lane.label ?? ""}
+                >
                   {lane.label}
                 </span>
               </div>
@@ -202,6 +214,18 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
           className="w-full overflow-x-auto"
         >
           <svg width={Math.max(width, 300)} height={svgHeight} className="block">
+            {isGrouped &&
+              displayOptions.laneBands &&
+              lanes.map((lane, i) => (
+                <rect
+                  key={`bg-${lane.key}`}
+                  x={0}
+                  y={lane.top}
+                  width={width}
+                  height={lane.height}
+                  fill={laneBandColor(i)}
+                />
+              ))}
             {ticks.map((t) => (
               <g key={t}>
                 <line x1={x(t)} y1={HEADER_HEIGHT - 8} x2={x(t)} y2={svgHeight - 4} stroke="#eaeef2" strokeWidth={1} />

@@ -1,13 +1,15 @@
+import { LANE_BAND_PRESETS } from "../types";
 import type { DisplayOptions } from "../types";
 
 interface Props {
   options: DisplayOptions;
   allExtraFields: string[];
+  hasSwimlanes: boolean;
   onChange: (updater: (prev: DisplayOptions) => DisplayOptions) => void;
   onClose: () => void;
 }
 
-export function DisplayOptionsPanel({ options, allExtraFields, onChange, onClose }: Props) {
+export function DisplayOptionsPanel({ options, allExtraFields, hasSwimlanes, onChange, onClose }: Props) {
   const toggle = (key: keyof DisplayOptions) =>
     onChange((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -61,6 +63,61 @@ export function DisplayOptionsPanel({ options, allExtraFields, onChange, onClose
               {f}
             </label>
           ))}
+        </>
+      )}
+
+      {hasSwimlanes && (
+        <>
+          <hr className="my-3 border-line" />
+          <label className="flex items-center gap-2 py-1 text-sm">
+            <input type="checkbox" checked={options.laneBands} onChange={() => toggle("laneBands")} />
+            Alternating swimlane bands
+          </label>
+          {options.laneBands && (
+            <div className="mt-2 space-y-2">
+              <div className="flex flex-wrap gap-1">
+                {LANE_BAND_PRESETS.map((preset) => {
+                  const active =
+                    options.laneBandColors[0] === preset.colors[0] &&
+                    options.laneBandColors[1] === preset.colors[1];
+                  return (
+                    <button
+                      key={preset.label}
+                      onClick={() => onChange((prev) => ({ ...prev, laneBandColors: preset.colors }))}
+                      title={preset.label}
+                      aria-label={`Band colors: ${preset.label}`}
+                      className={`flex h-7 w-9 overflow-hidden rounded border ${
+                        active ? "border-accent ring-1 ring-accent" : "border-line"
+                      }`}
+                    >
+                      <span className="h-full w-1/2" style={{ background: preset.colors[0] }} />
+                      <span className="h-full w-1/2" style={{ background: preset.colors[1] }} />
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-3 text-xs text-slate">
+                {([0, 1] as const).map((i) => (
+                  <label key={i} className="flex items-center gap-1">
+                    <input
+                      type="color"
+                      value={options.laneBandColors[i]}
+                      onChange={(e) =>
+                        onChange((prev) => {
+                          const next: [string, string] = [...prev.laneBandColors];
+                          next[i] = e.target.value;
+                          return { ...prev, laneBandColors: next };
+                        })
+                      }
+                      className="h-6 w-8 cursor-pointer rounded border border-line"
+                      aria-label={i === 0 ? "First band color" : "Second band color"}
+                    />
+                    {i === 0 ? "Odd lanes" : "Even lanes"}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 

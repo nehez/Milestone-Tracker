@@ -67,6 +67,7 @@ function App() {
                 <DisplayOptionsPanel
                   options={data.displayOptions}
                   allExtraFields={data.allExtraFields}
+                  hasSwimlanes={data.hasSwimlanes}
                   onChange={data.updateDisplayOptions}
                   onClose={() => setShowOptions(false)}
                 />
