@@ -8,6 +8,7 @@ import { Scrubber } from "./components/Scrubber";
 import { DisplayOptionsPanel } from "./components/DisplayOptionsPanel";
 import { ManageMilestonesPanel } from "./components/ManageMilestonesPanel";
 import { exportAsImage, exportAsPdf } from "./lib/exportImage";
+import { headerSignature } from "./lib/columnMapping";
 import { APP_VERSION } from "./version";
 
 function App() {
@@ -147,6 +148,7 @@ function App() {
         <AddSnapshotModal
           key={pending.fileName + pending.headers.join(",")}
           pending={pending}
+          knownMapping={data.mappings[headerSignature(pending.headers)]}
           onConfirm={(date, mapping) => data.confirmUpload(pending, date, mapping)}
           onCancel={() => data.cancelUpload(pending)}
         />

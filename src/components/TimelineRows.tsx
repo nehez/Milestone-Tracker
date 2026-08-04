@@ -2,7 +2,8 @@ import { motion } from "framer-motion";
 import { formatDate } from "../lib/dateScale";
 import type { DisplayOptions } from "../types";
 import type { LaneGroup, MarkerData } from "./timelineShared";
-import { STATUS_COLOR, isBarMarker, springTransition } from "./timelineShared";
+import { STATUS_COLOR, hasMovement, isBarMarker, springTransition } from "./timelineShared";
+import { MovementGhost } from "./MovementGhost";
 
 // Wide enough for a full real-world milestone title (e.g. "SVT MS: Blipty Squat Y
 // section acceptance complete") on one line, with two-line wrap as the fallback.
@@ -238,6 +239,22 @@ export function TimelineRowsChart({
             if (v !== undefined && v !== null && v !== "") parts.push(String(v));
           });
 
+          const first = m.milestone.entries[0];
+          const showGhost = displayOptions.showMovement && hasMovement(m);
+
+          // A pulled-in item's ghost sits to the right of its current marker (that's
+          // where it used to be), the same side the trailing label normally goes —
+          // flip the label to the left in that case so the two don't overlap.
+          const newAnchor = bar ? markerX + barWidth / 2 : markerX;
+          const oldAnchor =
+            showGhost && first.date
+              ? bar && first.startDate
+                ? (x(first.startDate) + x(first.date)) / 2
+                : x(first.date)
+              : null;
+          const ghostOnRight = oldAnchor !== null && oldAnchor > newAnchor;
+          const textX = ghostOnRight ? markerX - 10 : (bar ? markerX + barWidth : markerX) + 10;
+
           return (
             <g key={row.key}>
               <line
@@ -248,6 +265,31 @@ export function TimelineRowsChart({
                 stroke="#f0f3f6"
                 strokeWidth={1}
               />
+              {showGhost &&
+                (bar
+                  ? first.startDate &&
+                    first.date && (
+                      <MovementGhost
+                        isBar
+                        y={midY}
+                        color={color}
+                        oldStart={x(first.startDate)}
+                        oldEnd={x(first.date)}
+                        newStart={markerX}
+                        newEnd={markerX + barWidth}
+                      />
+                    )
+                  : first.date && (
+                      <MovementGhost
+                        isBar={false}
+                        y={midY}
+                        color={color}
+                        oldStart={x(first.date)}
+                        oldEnd={x(first.date)}
+                        newStart={markerX}
+                        newEnd={markerX}
+                      />
+                    ))}
               {bar ? (
                 <>
                   <motion.rect
@@ -287,10 +329,11 @@ export function TimelineRowsChart({
               )}
 
               <motion.text
-                animate={{ x: (bar ? markerX + barWidth : markerX) + 10 }}
-                initial={{ x: (bar ? markerX + barWidth : markerX) + 10 }}
+                animate={{ x: textX }}
+                initial={{ x: textX }}
                 transition={springTransition}
                 y={midY + 3.5}
+                textAnchor={ghostOnRight ? "end" : "start"}
                 fontSize={10}
                 fill="#57606a"
               >

@@ -41,6 +41,23 @@ export function markerAnchorX(m: MarkerData, x: (iso: string) => number): number
 }
 
 /**
+ * Whether this item's date(s) differ between its very first recorded snapshot and
+ * the snapshot currently on screen — i.e. whether a "moved from here" ghost has
+ * anything to show. Used by the movement overlay, which is the only way a static
+ * PNG/PDF export can convey the animation the live scrubber shows.
+ */
+export function hasMovement(m: MarkerData): boolean {
+  const first = m.milestone.entries[0];
+  if (!first) return false;
+  if (isBarMarker(m)) {
+    if (!first.startDate || !first.date) return false;
+    return first.startDate !== m.entry.startDate || first.date !== m.entry.date;
+  }
+  if (!first.date) return false;
+  return first.date !== m.entry.date;
+}
+
+/**
  * Compact labels sit in a ~112px slot under each marker, so long names truncate and
  * dense schedules stack into unreadable bands. Auto falls back to the row layout
  * once either becomes likely.

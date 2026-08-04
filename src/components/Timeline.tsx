@@ -5,6 +5,7 @@ import { entryForSnapshot } from "../lib/scrubber";
 import { isEntryVisible, statusOf } from "../lib/milestones";
 import {
   STATUS_COLOR,
+  hasMovement,
   isBarMarker,
   markerAnchorX,
   resolveLayout,
@@ -17,6 +18,7 @@ import {
   TimelineRowsNameColumn,
   buildRows,
 } from "./TimelineRows";
+import { MovementGhost } from "./MovementGhost";
 import type { DisplayOptions, Milestone, Snapshot } from "../types";
 
 interface Props {
@@ -333,6 +335,9 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
                     </motion.g>
                   );
 
+                  const showGhost = displayOptions.showMovement && hasMovement(m);
+                  const first = milestone.entries[0];
+
                   if (isBarMarker(m)) {
                     const xStart = x(entry.startDate!);
                     const xEnd = x(entry.date!);
@@ -341,6 +346,17 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
                       entry.percentComplete !== null ? barWidth * (entry.percentComplete / 100) : barWidth;
                     return (
                       <g key={milestone.uid}>
+                        {showGhost && first.startDate && first.date && (
+                          <MovementGhost
+                            isBar
+                            y={lane.baselineY}
+                            color={color}
+                            oldStart={x(first.startDate)}
+                            oldEnd={x(first.date)}
+                            newStart={xStart}
+                            newEnd={xEnd}
+                          />
+                        )}
                         <motion.rect
                           animate={{ x: xStart, width: barWidth }}
                           initial={{ x: xStart, width: barWidth }}
@@ -367,6 +383,17 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
 
                   return (
                     <g key={milestone.uid}>
+                      {showGhost && first.date && (
+                        <MovementGhost
+                          isBar={false}
+                          y={lane.baselineY}
+                          color={color}
+                          oldStart={x(first.date)}
+                          oldEnd={x(first.date)}
+                          newStart={anchorX}
+                          newEnd={anchorX}
+                        />
+                      )}
                       <motion.g animate={{ x: anchorX }} initial={{ x: anchorX }} transition={springTransition}>
                         <rect
                           x={-6}

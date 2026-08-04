@@ -57,6 +57,19 @@ export function DisplayOptionsPanel({ options, allExtraFields, hasSwimlanes, onC
         {LAYOUT_CHOICES.find((c) => c.value === options.layout)?.hint}
       </p>
 
+      <label className="mb-1 flex items-center gap-2 py-1 text-sm">
+        <input
+          type="checkbox"
+          checked={options.showMovement}
+          onChange={() => toggle("showMovement")}
+        />
+        Show movement (baseline → now)
+      </label>
+      <p className="mb-3 text-xs text-slate">
+        A faded marker at the original date, with an arrow to where it stands now — so a slip or
+        pull-in reads from a still PNG/PDF, not just the on-screen animation.
+      </p>
+
       <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate">Show on each marker</p>
       <label className="flex items-center gap-2 py-1 text-sm">
         <input type="checkbox" checked={options.showName} onChange={() => toggle("showName")} />

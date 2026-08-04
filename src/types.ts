@@ -87,6 +87,8 @@ export interface DisplayOptions {
   /** The two colors alternated across lanes when laneBands is on. */
   laneBandColors: [string, string];
   layout: TimelineLayout;
+  /** Ghost marker at the original date + arrow to the current one, for items that moved. */
+  showMovement: boolean;
 }
 
 /** Above either threshold, compact labels collide or truncate, so "auto" switches to rows. */

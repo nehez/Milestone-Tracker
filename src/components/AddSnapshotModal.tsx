@@ -1,19 +1,41 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FIELD_ROLES } from "../types";
 import type { ColumnMapping, FieldRole } from "../types";
-import { headerSignature, isMappingComplete } from "../lib/columnMapping";
+import { guessMapping, headerSignature, isMappingComplete } from "../lib/columnMapping";
 import type { PendingUpload } from "../lib/useAppData";
 
 interface Props {
   pending: PendingUpload;
+  /**
+   * A mapping already confirmed for this header shape, if any — checked fresh at
+   * render time (not captured when the file was queued), so if you upload several
+   * files with identical columns in one go, confirming the first one's mapping
+   * immediately collapses the rest to the "looks familiar" shortcut too.
+   */
+  knownMapping: ColumnMapping | undefined;
   onConfirm: (date: string, mapping: ColumnMapping) => void;
   onCancel: () => void;
 }
 
-export function AddSnapshotModal({ pending, onConfirm, onCancel }: Props) {
+export function AddSnapshotModal({ pending, knownMapping, onConfirm, onCancel }: Props) {
   const [date, setDate] = useState(pending.suggestedDate);
-  const [roles, setRoles] = useState<Partial<Record<FieldRole, string>>>(pending.mapping.roles);
-  const [showMapping, setShowMapping] = useState(!pending.isKnownMapping);
+  const [roles, setRoles] = useState<Partial<Record<FieldRole, string>>>(
+    () => (knownMapping ?? guessMapping(pending.headers)).roles
+  );
+  const [showMapping, setShowMapping] = useState(!knownMapping);
+  // Multi-select uploads mount every modal in the batch before any of them has
+  // been confirmed, so this one's `knownMapping` can go from undefined to defined
+  // later (once a sibling with the same columns is confirmed) without a remount —
+  // React matches these by key, so the useState initializers above only ran once.
+  // Adopt it then, unless the person has already started reviewing this modal.
+  const [userTookControl, setUserTookControl] = useState(false);
+  useEffect(() => {
+    if (knownMapping && !userTookControl) {
+      setRoles(knownMapping.roles);
+      setShowMapping(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [knownMapping]);
 
   const mapping: ColumnMapping = {
     signature: headerSignature(pending.headers),
@@ -22,6 +44,12 @@ export function AddSnapshotModal({ pending, onConfirm, onCancel }: Props) {
     extraFields: pending.headers.filter((h) => !Object.values(roles).includes(h)),
   };
   const complete = isMappingComplete(mapping);
+
+  // MS Project's generic custom fields ("Flag1" .. "Flag20") are user-repurposed —
+  // e.g. Flag3 might mean "milestone" on one project and "at risk" on another — so
+  // we deliberately never guess one automatically. When several are present, call
+  // that out rather than leaving the person to guess why nothing got pre-selected.
+  const flagColumns = pending.headers.filter((h) => /^flag\s*\d+$/i.test(h.trim()));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -41,9 +69,12 @@ export function AddSnapshotModal({ pending, onConfirm, onCancel }: Props) {
           />
         </label>
 
-        {pending.isKnownMapping && !showMapping ? (
+        {knownMapping && !showMapping ? (
           <button
-            onClick={() => setShowMapping(true)}
+            onClick={() => {
+              setUserTookControl(true);
+              setShowMapping(true);
+            }}
             className="mt-4 text-sm text-accent underline"
           >
             This file looks like a format you've used before &mdash; edit column mapping
@@ -62,9 +93,10 @@ export function AddSnapshotModal({ pending, onConfirm, onCancel }: Props) {
                   </span>
                   <select
                     value={roles[role] ?? ""}
-                    onChange={(e) =>
-                      setRoles((prev) => ({ ...prev, [role]: e.target.value || undefined }))
-                    }
+                    onChange={(e) => {
+                      setUserTookControl(true);
+                      setRoles((prev) => ({ ...prev, [role]: e.target.value || undefined }));
+                    }}
                     className="rounded-md border border-line px-2 py-1"
                   >
                     <option value="">&mdash; not in file &mdash;</option>
@@ -76,6 +108,13 @@ export function AddSnapshotModal({ pending, onConfirm, onCancel }: Props) {
                   </select>
                 </label>
                 {hint && <p className="mt-0.5 text-xs text-slate">{hint}</p>}
+                {role === "isMilestone" && flagColumns.length > 1 && (
+                  <p className="mt-0.5 text-xs text-accent">
+                    This file has {flagColumns.length} Flag columns ({flagColumns.join(", ")}) &mdash;
+                    MS Project's generic custom fields. Pick whichever one your team uses to mark
+                    milestones.
+                  </p>
+                )}
               </div>
             ))}
             <p className="text-xs text-slate">

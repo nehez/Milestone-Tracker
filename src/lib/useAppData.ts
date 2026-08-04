@@ -13,7 +13,7 @@ import {
   saveSnapshot,
 } from "./db";
 import { parseExcelFile } from "./excel";
-import { guessMapping, headerSignature } from "./columnMapping";
+import { headerSignature } from "./columnMapping";
 import { buildMilestones, latestEntry } from "./milestones";
 import { DEFAULT_LANE_BAND_COLORS } from "../types";
 import type { AppSettings, ColumnMapping, DisplayOptions, Snapshot } from "../types";
@@ -30,6 +30,7 @@ const DEFAULT_DISPLAY_OPTIONS: DisplayOptions = {
   laneBands: true,
   laneBandColors: DEFAULT_LANE_BAND_COLORS,
   layout: "auto",
+  showMovement: true,
 };
 
 export interface PendingUpload {
@@ -37,8 +38,6 @@ export interface PendingUpload {
   headers: string[];
   rows: import("../types").RawRow[];
   suggestedDate: string;
-  mapping: ColumnMapping;
-  isKnownMapping: boolean;
 }
 
 export function useAppData() {
@@ -82,23 +81,22 @@ export function useAppData() {
     for (const file of fileArray) {
       try {
         const { headers, rows } = await parseExcelFile(file);
-        const sig = headerSignature(headers);
-        const known = mappings[sig];
-        const mapping = known ?? guessMapping(headers);
         queued.push({
           fileName: file.name,
           headers,
           rows,
           suggestedDate: guessDateFromFileName(file.name),
-          mapping,
-          isKnownMapping: Boolean(known),
         });
       } catch (e) {
         setError(`Couldn't read "${file.name}": ${(e as Error).message}`);
       }
     }
+    // Column mapping is resolved per-modal at render time (see App.tsx), not here —
+    // selecting several files in one picker action queues them all before any of
+    // this batch has been confirmed, so a mapping learned from the first file in
+    // the batch wouldn't yet be visible to a snapshot taken here for the second.
     setPendingUploads((prev) => [...prev, ...queued]);
-  }, [mappings]);
+  }, []);
 
   const confirmUpload = useCallback(
     async (pending: PendingUpload, date: string, mapping: ColumnMapping) => {
