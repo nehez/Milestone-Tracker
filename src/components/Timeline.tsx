@@ -3,7 +3,21 @@ import { motion } from "framer-motion";
 import { addDays, clampZoom, daysBetween, formatDate, monthTicks } from "../lib/dateScale";
 import { entryForSnapshot } from "../lib/scrubber";
 import { isEntryVisible, statusOf } from "../lib/milestones";
-import type { DisplayOptions, Milestone, MilestoneEntry, Snapshot } from "../types";
+import {
+  STATUS_COLOR,
+  isBarMarker,
+  markerAnchorX,
+  resolveLayout,
+  springTransition,
+} from "./timelineShared";
+import type { LaneGroup, MarkerData } from "./timelineShared";
+import {
+  ROWS_HEADER_HEIGHT,
+  TimelineRowsChart,
+  TimelineRowsNameColumn,
+  buildRows,
+} from "./TimelineRows";
+import type { DisplayOptions, Milestone, Snapshot } from "../types";
 
 interface Props {
   milestones: Milestone[];
@@ -12,14 +26,6 @@ interface Props {
   displayOptions: DisplayOptions;
   overrides: Record<string, boolean>;
 }
-
-const STATUS_COLOR: Record<string, string> = {
-  "on-track": "#2f6feb",
-  slipped: "#cf222e",
-  "pulled-in": "#1a7f37",
-  done: "#6e7781",
-  unknown: "#9aa4b2",
-};
 
 const HEADER_HEIGHT = 28;
 const LANE_BASELINE_PAD = 22;
@@ -30,24 +36,6 @@ const LABEL_MIN_GAP_PX = 118;
 const LANE_LABEL_WIDTH = 128;
 const LABEL_WIDTH = 112;
 const LABEL_EDGE_PAD = 4;
-
-interface MarkerData {
-  milestone: Milestone;
-  entry: MilestoneEntry;
-  status: ReturnType<typeof statusOf>["status"];
-  deltaDays: number;
-}
-
-/** Non-milestone items with a real Start/Finish span render as a duration bar instead of a point. */
-function isBarMarker(m: MarkerData): boolean {
-  return !m.entry.isMilestone && Boolean(m.entry.startDate) && m.entry.startDate !== m.entry.date;
-}
-
-/** Where a marker's label/connector anchors horizontally: the point for a milestone, the midpoint for a bar. */
-function markerAnchorX(m: MarkerData, x: (iso: string) => number): number {
-  if (isBarMarker(m)) return (x(m.entry.startDate!) + x(m.entry.date!)) / 2;
-  return x(m.entry.date!);
-}
 
 function assignBands(markers: MarkerData[], x: (iso: string) => number) {
   const sorted = [...markers].sort((a, b) => markerAnchorX(a, x) - markerAnchorX(b, x));
@@ -95,7 +83,7 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
   const width = totalDays * pxPerDay;
   const x = (iso: string) => daysBetween(domain.start, iso) * pxPerDay;
 
-  const lanes = useMemo(() => {
+  const lanes = useMemo<LaneGroup[]>(() => {
     const grouped = markers.some((m) => m.entry.group);
     const buckets = new Map<string, MarkerData[]>();
     for (const m of markers) {
@@ -128,7 +116,19 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
   const isGrouped = lanes.length > 0 && lanes[0].label !== null;
   const laneBandColor = (i: number) =>
     displayOptions.laneBands ? displayOptions.laneBandColors[i % 2] : undefined;
-  const svgHeight = (lanes.length ? lanes[lanes.length - 1].top + lanes[lanes.length - 1].height : HEADER_HEIGHT) + 8;
+
+  const mode = resolveLayout(displayOptions.layout, markers);
+  const rows = useMemo(
+    () => (mode === "rows" ? buildRows(lanes, isGrouped) : []),
+    [mode, lanes, isGrouped]
+  );
+
+  const compactHeight =
+    (lanes.length ? lanes[lanes.length - 1].top + lanes[lanes.length - 1].height : HEADER_HEIGHT) + 8;
+  const rowsHeight = rows.length
+    ? rows[rows.length - 1].top + rows[rows.length - 1].height + 8
+    : ROWS_HEADER_HEIGHT + 8;
+  const svgHeight = mode === "rows" ? rowsHeight : compactHeight;
 
   const ticks = useMemo(() => monthTicks(domain.start, domain.end), [domain]);
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -176,7 +176,10 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
       </div>
 
       <div className="flex rounded-xl border border-line bg-white">
-        {isGrouped && (
+        {mode === "rows" && (
+          <TimelineRowsNameColumn rows={rows} svgHeight={svgHeight} laneBandColor={laneBandColor} />
+        )}
+        {mode === "compact" && isGrouped && (
           <div className="w-32 flex-shrink-0 border-r border-line" style={{ width: LANE_LABEL_WIDTH }}>
             <div style={{ height: HEADER_HEIGHT }} />
             {lanes.map((lane, i) => (
@@ -213,6 +216,19 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
           }}
           className="w-full overflow-x-auto"
         >
+          {mode === "rows" ? (
+            <TimelineRowsChart
+              rows={rows}
+              width={width}
+              svgHeight={svgHeight}
+              displayOptions={displayOptions}
+              laneBandColor={laneBandColor}
+              x={x}
+              ticks={ticks}
+              todayIso={todayIso}
+              showToday={showToday}
+            />
+          ) : (
           <svg width={Math.max(width, 300)} height={svgHeight} className="block">
             {isGrouped &&
               displayOptions.laneBands &&
@@ -298,8 +314,6 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
                     </foreignObject>
                   );
 
-                  const springTransition = { type: "spring" as const, stiffness: 90, damping: 16 };
-
                   const connector = (
                     <motion.line
                       animate={{ x1: anchorX, x2: labelX + LABEL_WIDTH / 2 }}
@@ -371,6 +385,7 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
               </g>
             ))}
           </svg>
+          )}
         </div>
       </div>
     </div>

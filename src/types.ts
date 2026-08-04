@@ -68,6 +68,14 @@ export interface Milestone {
   entries: MilestoneEntry[]; // ordered by snapshotDate ascending
 }
 
+/**
+ * "compact" packs labels under the markers — a dense poster view that only works
+ * for short names. "rows" gives every item its own row with a full-width name
+ * column, which is what long titles and high item counts actually need.
+ * "auto" picks between them based on the data.
+ */
+export type TimelineLayout = "auto" | "compact" | "rows";
+
 export interface DisplayOptions {
   showName: boolean;
   showDate: boolean;
@@ -78,7 +86,12 @@ export interface DisplayOptions {
   laneBands: boolean;
   /** The two colors alternated across lanes when laneBands is on. */
   laneBandColors: [string, string];
+  layout: TimelineLayout;
 }
+
+/** Above either threshold, compact labels collide or truncate, so "auto" switches to rows. */
+export const AUTO_ROWS_NAME_LENGTH = 26;
+export const AUTO_ROWS_ITEM_COUNT = 14;
 
 export const DEFAULT_LANE_BAND_COLORS: [string, string] = ["#ffffff", "#f6f8fa"];
 

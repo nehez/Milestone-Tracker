@@ -1,5 +1,11 @@
 import { LANE_BAND_PRESETS } from "../types";
-import type { DisplayOptions } from "../types";
+import type { DisplayOptions, TimelineLayout } from "../types";
+
+const LAYOUT_CHOICES: { value: TimelineLayout; label: string; hint: string }[] = [
+  { value: "auto", label: "Auto", hint: "Rows when names are long or the chart is busy" },
+  { value: "compact", label: "Compact", hint: "Labels under markers — best for a few short names" },
+  { value: "rows", label: "Rows", hint: "One row each, full names — best for long titles" },
+];
 
 interface Props {
   options: DisplayOptions;
@@ -29,6 +35,27 @@ export function DisplayOptionsPanel({ options, allExtraFields, hasSwimlanes, onC
           ✕
         </button>
       </div>
+
+      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate">Layout</p>
+      <div className="mb-1 flex rounded-md border border-line p-0.5">
+        {LAYOUT_CHOICES.map((choice) => (
+          <button
+            key={choice.value}
+            onClick={() => onChange((prev) => ({ ...prev, layout: choice.value }))}
+            title={choice.hint}
+            className={`flex-1 rounded px-2 py-1 text-xs ${
+              options.layout === choice.value
+                ? "bg-accent font-medium text-white"
+                : "text-slate hover:bg-gray-50"
+            }`}
+          >
+            {choice.label}
+          </button>
+        ))}
+      </div>
+      <p className="mb-3 text-xs text-slate">
+        {LAYOUT_CHOICES.find((c) => c.value === options.layout)?.hint}
+      </p>
 
       <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate">Show on each marker</p>
       <label className="flex items-center gap-2 py-1 text-sm">

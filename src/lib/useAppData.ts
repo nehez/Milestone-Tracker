@@ -29,6 +29,7 @@ const DEFAULT_DISPLAY_OPTIONS: DisplayOptions = {
   visibleExtraFields: [],
   laneBands: true,
   laneBandColors: DEFAULT_LANE_BAND_COLORS,
+  layout: "auto",
 };
 
 export interface PendingUpload {
