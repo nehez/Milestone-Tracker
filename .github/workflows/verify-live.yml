@@ -1,0 +1,25 @@
+name: Verify live site
+
+# Temporary: this session's egress proxy blocks github.io, so this checks the
+# deployed URL from inside Actions instead. Delete once confirmed.
+on:
+  push:
+    branches: [main, claude/milestone-tracker-excel-3oy2ab]
+    paths:
+      - ".github/workflows/verify-live.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch live site
+        run: |
+          code=$(curl -s -o body.html -w "%{http_code}" https://nehez.github.io/Milestone-Tracker/)
+          echo "HTTP status: $code"
+          echo "--- first 20 lines ---"
+          head -20 body.html
+          echo "--- contains app title? ---"
+          grep -q "Milestone Tracker" body.html && echo "YES" || echo "NO"
