@@ -27,6 +27,7 @@ interface Props {
   activeSnapshotIndex: number;
   displayOptions: DisplayOptions;
   overrides: Record<string, boolean>;
+  onSelectMilestone: (milestone: Milestone) => void;
 }
 
 const HEADER_HEIGHT = 28;
@@ -54,7 +55,14 @@ function assignBands(markers: MarkerData[], x: (iso: string) => number) {
   return { bands: assigned, maxBand };
 }
 
-export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOptions, overrides }: Props) {
+export function Timeline({
+  milestones,
+  snapshots,
+  activeSnapshotIndex,
+  displayOptions,
+  overrides,
+  onSelectMilestone,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeSnapshot = snapshots[activeSnapshotIndex];
 
@@ -179,7 +187,12 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
 
       <div className="flex rounded-xl border border-line bg-white">
         {mode === "rows" && (
-          <TimelineRowsNameColumn rows={rows} svgHeight={svgHeight} laneBandColor={laneBandColor} />
+          <TimelineRowsNameColumn
+            rows={rows}
+            svgHeight={svgHeight}
+            laneBandColor={laneBandColor}
+            onSelectMilestone={onSelectMilestone}
+          />
         )}
         {mode === "compact" && isGrouped && (
           <div className="w-32 flex-shrink-0 border-r border-line" style={{ width: LANE_LABEL_WIDTH }}>
@@ -229,6 +242,7 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
               ticks={ticks}
               todayIso={todayIso}
               showToday={showToday}
+              onSelectMilestone={onSelectMilestone}
             />
           ) : (
           <svg width={Math.max(width, 300)} height={svgHeight} className="block">
@@ -345,7 +359,11 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
                     const fillWidth =
                       entry.percentComplete !== null ? barWidth * (entry.percentComplete / 100) : barWidth;
                     return (
-                      <g key={milestone.uid}>
+                      <g
+                        key={milestone.uid}
+                        onClick={() => onSelectMilestone(milestone)}
+                        className="cursor-pointer"
+                      >
                         {showGhost && first.startDate && first.date && (
                           <MovementGhost
                             isBar
@@ -382,7 +400,11 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
                   }
 
                   return (
-                    <g key={milestone.uid}>
+                    <g
+                      key={milestone.uid}
+                      onClick={() => onSelectMilestone(milestone)}
+                      className="cursor-pointer"
+                    >
                       {showGhost && first.date && (
                         <MovementGhost
                           isBar={false}

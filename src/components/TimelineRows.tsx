@@ -61,6 +61,7 @@ interface NameColumnProps {
   rows: RowLayoutItem[];
   svgHeight: number;
   laneBandColor: (i: number) => string | undefined;
+  onSelectMilestone: (milestone: MarkerData["milestone"]) => void;
 }
 
 const NAME_FONT_SIZE = 11.5;
@@ -83,7 +84,7 @@ function truncateToWidth(text: string, fontSize: number, availableWidth: number)
  * HTML text in fixed-height flex rows, so an HTML column exported differently than
  * it looked on screen. SVG <text> rasterizes identically in both.
  */
-export function TimelineRowsNameColumn({ rows, svgHeight, laneBandColor }: NameColumnProps) {
+export function TimelineRowsNameColumn({ rows, svgHeight, laneBandColor, onSelectMilestone }: NameColumnProps) {
   return (
     <div className="flex-shrink-0 border-r border-line" style={{ width: NAME_COL_WIDTH }}>
       <svg width={NAME_COL_WIDTH} height={svgHeight} className="block">
@@ -110,9 +111,16 @@ export function TimelineRowsNameColumn({ rows, svgHeight, laneBandColor }: NameC
             NAME_COL_WIDTH - indent - 8
           );
           return (
-            <g key={row.key}>
+            <g
+              key={row.key}
+              onClick={row.marker ? () => onSelectMilestone(row.marker!.milestone) : undefined}
+              className={row.marker ? "cursor-pointer" : undefined}
+            >
               {isLane && (
                 <line x1={0} y1={row.top} x2={NAME_COL_WIDTH} y2={row.top} stroke="#d0d7de" strokeWidth={1} />
+              )}
+              {row.marker && (
+                <rect x={0} y={row.top} width={NAME_COL_WIDTH} height={row.height} fill="transparent" />
               )}
               <text
                 x={indent}
@@ -143,6 +151,7 @@ interface Props {
   ticks: string[];
   todayIso: string;
   showToday: boolean;
+  onSelectMilestone: (milestone: MarkerData["milestone"]) => void;
 }
 
 export function TimelineRowsChart({
@@ -155,6 +164,7 @@ export function TimelineRowsChart({
   ticks,
   todayIso,
   showToday,
+  onSelectMilestone,
 }: Props) {
   return (
       <svg width={Math.max(width, 300)} height={svgHeight} className="block">
@@ -256,7 +266,12 @@ export function TimelineRowsChart({
           const textX = ghostOnRight ? markerX - 10 : (bar ? markerX + barWidth : markerX) + 10;
 
           return (
-            <g key={row.key}>
+            <g
+              key={row.key}
+              onClick={() => onSelectMilestone(m.milestone)}
+              className="cursor-pointer"
+            >
+              <rect x={0} y={row.top} width={width} height={row.height} fill="transparent" />
               <line
                 x1={0}
                 y1={row.top + row.height}

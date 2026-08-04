@@ -7,9 +7,11 @@ import { Timeline } from "./components/Timeline";
 import { Scrubber } from "./components/Scrubber";
 import { DisplayOptionsPanel } from "./components/DisplayOptionsPanel";
 import { ManageMilestonesPanel } from "./components/ManageMilestonesPanel";
+import { MilestoneDetailModal } from "./components/MilestoneDetailModal";
 import { exportAsImage, exportAsPdf } from "./lib/exportImage";
 import { headerSignature } from "./lib/columnMapping";
 import { APP_VERSION } from "./version";
+import type { Milestone } from "./types";
 
 function App() {
   const data = useAppData();
@@ -17,6 +19,7 @@ function App() {
   const [showOptions, setShowOptions] = useState(false);
   const [showManage, setShowManage] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
   const hasData = data.snapshots.length > 0;
@@ -127,6 +130,7 @@ function App() {
                 activeSnapshotIndex={clampedIndex}
                 displayOptions={data.displayOptions}
                 overrides={data.overrides}
+                onSelectMilestone={setSelectedMilestone}
               />
             </div>
 
@@ -159,6 +163,13 @@ function App() {
           summaries={data.milestoneSummaries}
           onSetOverride={data.setOverride}
           onClose={() => setShowManage(false)}
+        />
+      )}
+
+      {selectedMilestone && (
+        <MilestoneDetailModal
+          milestone={selectedMilestone}
+          onClose={() => setSelectedMilestone(null)}
         />
       )}
     </div>
