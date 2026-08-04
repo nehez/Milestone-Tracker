@@ -28,6 +28,7 @@ export function Scrubber({ snapshots, activeIndex, onChange }: Props) {
         disabled={snapshots.length < 2}
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-white disabled:opacity-30"
         title={playing ? "Pause" : "Play through snapshots"}
+        aria-label={playing ? "Pause" : "Play through snapshots"}
       >
         {playing ? (
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">

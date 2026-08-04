@@ -158,6 +158,7 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
             onClick={() => zoom(0.75)}
             className="h-7 w-7 rounded-md border border-line bg-white text-sm text-slate hover:bg-gray-50"
             title="Zoom out"
+            aria-label="Zoom out"
           >
             −
           </button>
@@ -165,6 +166,7 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
             onClick={() => zoom(1.3333)}
             className="h-7 w-7 rounded-md border border-line bg-white text-sm text-slate hover:bg-gray-50"
             title="Zoom in"
+            aria-label="Zoom in"
           >
             +
           </button>

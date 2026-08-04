@@ -21,6 +21,7 @@ export function SnapshotList({ snapshots, onRemove }: Props) {
             onClick={() => onRemove(s.id)}
             className="text-slate hover:text-late"
             title={`Remove ${s.fileName}`}
+            aria-label={`Remove ${s.fileName}`}
           >
             ✕
           </button>
