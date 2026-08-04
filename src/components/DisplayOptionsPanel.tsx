@@ -72,10 +72,11 @@ export function DisplayOptionsPanel({ options, allExtraFields, onChange, onClose
           checked={options.milestonesOnly}
           onChange={() => toggle("milestonesOnly")}
         />
-        Only show rows marked "Yes" in the milestone flag column
+        Only show milestones (flagged "Yes", or 0-day tasks)
       </label>
       <p className="mt-1 text-xs text-slate">
-        Turn this off to show every row in the file, including ones without a flag column mapped.
+        Turn this off to show every row in the file. Individual items can be overridden either way
+        from "Manage milestones."
       </p>
     </div>
   );

@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   clearAllData,
+  deleteOverride,
   deleteSnapshot,
   loadMapping,
+  loadOverrides,
   loadSettings,
   loadSnapshots,
   saveMapping,
+  saveOverride,
   saveSettings,
   saveSnapshot,
 } from "./db";
 import { parseExcelFile } from "./excel";
 import { guessMapping, headerSignature } from "./columnMapping";
-import { buildMilestones } from "./milestones";
+import { buildMilestones, latestEntry } from "./milestones";
 import type { AppSettings, ColumnMapping, DisplayOptions, Snapshot } from "../types";
 
 const DEFAULT_DISPLAY_OPTIONS: DisplayOptions = {
@@ -38,15 +41,21 @@ export function useAppData() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [mappings, setMappings] = useState<Record<string, ColumnMapping>>({});
   const [displayOptions, setDisplayOptions] = useState<DisplayOptions>(DEFAULT_DISPLAY_OPTIONS);
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [loaded, setLoaded] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const [snaps, settings] = await Promise.all([loadSnapshots(), loadSettings()]);
+      const [snaps, settings, savedOverrides] = await Promise.all([
+        loadSnapshots(),
+        loadSettings(),
+        loadOverrides(),
+      ]);
       setSnapshots(snaps);
       if (settings) setDisplayOptions(settings.displayOptions);
+      setOverrides(Object.fromEntries(savedOverrides.map((o) => [o.uid, o.visible])));
 
       const uniqueSignatures = new Set(
         snaps.map((s) => headerSignature(s.headers))
@@ -128,7 +137,20 @@ export function useAppData() {
     setSnapshots([]);
     setMappings({});
     setDisplayOptions(DEFAULT_DISPLAY_OPTIONS);
+    setOverrides({});
     setPendingUploads([]);
+  }, []);
+
+  /** Pin a milestone's visibility, overriding whatever its spreadsheet flag says. Pass undefined to un-pin. */
+  const setOverride = useCallback((uid: string, visible: boolean | undefined) => {
+    setOverrides((prev) => {
+      const next = { ...prev };
+      if (visible === undefined) delete next[uid];
+      else next[uid] = visible;
+      return next;
+    });
+    if (visible === undefined) void deleteOverride(uid);
+    else void saveOverride({ uid, visible });
   }, []);
 
   const milestones = useMemo(() => buildMilestones(snapshots, mappings), [snapshots, mappings]);
@@ -139,14 +161,35 @@ export function useAppData() {
     return [...set];
   }, [mappings]);
 
+  /** One row per unique UID for the "Manage milestones" picker, using each milestone's most recent snapshot. */
+  const milestoneSummaries = useMemo(
+    () =>
+      milestones
+        .map((m) => {
+          const latest = latestEntry(m);
+          return {
+            uid: m.uid,
+            name: latest?.name || "(untitled)",
+            date: latest?.date ?? null,
+            flagged: latest?.isMilestone ?? true,
+            override: overrides[m.uid],
+          };
+        })
+        .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999")),
+    [milestones, overrides]
+  );
+
   return {
     loaded,
     snapshots,
     mappings,
     milestones,
+    milestoneSummaries,
     allExtraFields,
     displayOptions,
     updateDisplayOptions,
+    overrides,
+    setOverride,
     pendingUploads,
     addFiles,
     confirmUpload,

@@ -1,24 +1,30 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { AppSettings, ColumnMapping, Snapshot } from "../types";
+import type { AppSettings, ColumnMapping, MilestoneOverride, Snapshot } from "../types";
 
 interface MilestoneTrackerDB extends DBSchema {
   snapshots: { key: string; value: Snapshot };
   mappings: { key: string; value: ColumnMapping };
   settings: { key: string; value: AppSettings };
+  overrides: { key: string; value: MilestoneOverride };
 }
 
 const DB_NAME = "milestone-tracker";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<MilestoneTrackerDB>> | null = null;
 
 function getDb() {
   if (!dbPromise) {
     dbPromise = openDB<MilestoneTrackerDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        db.createObjectStore("snapshots", { keyPath: "id" });
-        db.createObjectStore("mappings", { keyPath: "signature" });
-        db.createObjectStore("settings");
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          db.createObjectStore("snapshots", { keyPath: "id" });
+          db.createObjectStore("mappings", { keyPath: "signature" });
+          db.createObjectStore("settings");
+        }
+        if (oldVersion < 2) {
+          db.createObjectStore("overrides", { keyPath: "uid" });
+        }
       },
     });
   }
@@ -61,11 +67,27 @@ export async function loadSettings(): Promise<AppSettings | undefined> {
   return db.get("settings", "app-settings");
 }
 
+export async function saveOverride(override: MilestoneOverride): Promise<void> {
+  const db = await getDb();
+  await db.put("overrides", override);
+}
+
+export async function deleteOverride(uid: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("overrides", uid);
+}
+
+export async function loadOverrides(): Promise<MilestoneOverride[]> {
+  const db = await getDb();
+  return db.getAll("overrides");
+}
+
 export async function clearAllData(): Promise<void> {
   const db = await getDb();
   await Promise.all([
     db.clear("snapshots"),
     db.clear("mappings"),
     db.clear("settings"),
+    db.clear("overrides"),
   ]);
 }

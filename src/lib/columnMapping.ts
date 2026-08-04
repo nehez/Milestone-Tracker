@@ -12,6 +12,7 @@ const GUESS_PATTERNS: Record<FieldRole, RegExp[]> = {
   start: [/^start$/i, /^start\s*date$/i],
   percentComplete: [/^%\s*complete$/i, /^percent\s*complete$/i, /^pct\s*complete$/i, /^% comp/i],
   isMilestone: [/^milestone$/i, /^is\s*milestone$/i],
+  group: [/^phase$/i, /^workstream$/i, /^swimlane$/i, /^group$/i, /^summary\s*task$/i, /^category$/i],
 };
 
 export function guessMapping(headers: string[]): ColumnMapping {

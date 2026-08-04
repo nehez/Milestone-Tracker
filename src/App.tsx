@@ -6,12 +6,15 @@ import { SnapshotList } from "./components/SnapshotList";
 import { Timeline } from "./components/Timeline";
 import { Scrubber } from "./components/Scrubber";
 import { DisplayOptionsPanel } from "./components/DisplayOptionsPanel";
+import { ManageMilestonesPanel } from "./components/ManageMilestonesPanel";
 import { exportAsImage, exportAsPdf } from "./lib/exportImage";
+import { APP_VERSION } from "./version";
 
 function App() {
   const data = useAppData();
   const [activeSnapshotIndex, setActiveSnapshotIndex] = useState(0);
   const [showOptions, setShowOptions] = useState(false);
+  const [showManage, setShowManage] = useState(false);
   const [exporting, setExporting] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
@@ -38,11 +41,22 @@ function App() {
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div>
-            <h1 className="text-lg font-semibold text-ink">Milestone Tracker</h1>
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-lg font-semibold text-ink">Milestone Tracker</h1>
+              <span className="text-xs text-slate/70" title="App version">
+                v{APP_VERSION}
+              </span>
+            </div>
             <p className="text-xs text-slate">Everything stays in this browser &mdash; nothing is uploaded.</p>
           </div>
           {hasData && (
             <div className="relative flex items-center gap-2">
+              <button
+                onClick={() => setShowManage(true)}
+                className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink hover:bg-gray-50"
+              >
+                Manage milestones
+              </button>
               <button
                 onClick={() => setShowOptions((s) => !s)}
                 className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink hover:bg-gray-50"
@@ -110,6 +124,7 @@ function App() {
                 snapshots={data.snapshots}
                 activeSnapshotIndex={clampedIndex}
                 displayOptions={data.displayOptions}
+                overrides={data.overrides}
               />
             </div>
 
@@ -135,6 +150,14 @@ function App() {
           onCancel={() => data.cancelUpload(pending)}
         />
       ))}
+
+      {showManage && (
+        <ManageMilestonesPanel
+          summaries={data.milestoneSummaries}
+          onSetOverride={data.setOverride}
+          onClose={() => setShowManage(false)}
+        />
+      )}
     </div>
   );
 }

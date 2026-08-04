@@ -1,4 +1,11 @@
-export type FieldRole = "uid" | "name" | "start" | "finish" | "percentComplete" | "isMilestone";
+export type FieldRole =
+  | "uid"
+  | "name"
+  | "start"
+  | "finish"
+  | "percentComplete"
+  | "isMilestone"
+  | "group";
 
 export const FIELD_ROLES: { role: FieldRole; label: string; required: boolean; hint?: string }[] = [
   { role: "uid", label: "Unique ID (UID)", required: true },
@@ -10,7 +17,13 @@ export const FIELD_ROLES: { role: FieldRole; label: string; required: boolean; h
     role: "isMilestone",
     label: "Milestone flag (Yes/No column)",
     required: false,
-    hint: "Only rows marked Yes here will show on the timeline. Leave unset to show every row in the file.",
+    hint: "Rows marked Yes here show by default, along with any 0-day tasks (Start = Finish) even if unflagged. Fine-tune individual items later from “Manage milestones” without re-uploading. Leave unset to default to every row in the file.",
+  },
+  {
+    role: "group",
+    label: "Group / swimlane (optional)",
+    required: false,
+    hint: "Splits the timeline into horizontal lanes by this column (e.g. phase, workstream, summary task) so a busy schedule doesn't crowd onto one line. Leave unset for a single timeline line.",
   },
 ];
 
@@ -46,6 +59,7 @@ export interface MilestoneEntry {
   startDate: string | null;
   percentComplete: number | null;
   isMilestone: boolean;
+  group: string | null;
   extra: Record<string, string | number | boolean | null | undefined>;
 }
 
@@ -64,4 +78,10 @@ export interface DisplayOptions {
 
 export interface AppSettings {
   displayOptions: DisplayOptions;
+}
+
+/** A manual per-UID visibility pin, set from the "Manage milestones" picker. Overrides the spreadsheet flag either way. */
+export interface MilestoneOverride {
+  uid: string;
+  visible: boolean;
 }

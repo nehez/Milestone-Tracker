@@ -17,18 +17,26 @@ export function buildMilestones(
       if (uid === null || uid === "") continue;
       const uidKey = String(uid);
 
+      const date = mapping.roles.finish ? toIsoDate(readCell(row, mapping.roles.finish)) : null;
+      const startDate = mapping.roles.start ? toIsoDate(readCell(row, mapping.roles.start)) : null;
+      const flagged = mapping.roles.isMilestone
+        ? toBool(readCell(row, mapping.roles.isMilestone))
+        : null;
+      // MS Project's own definition of a milestone is a 0-duration task; treat those as
+      // eligible by default too, even if the flag column was missed for that row.
+      const zeroDuration = Boolean(startDate && date && startDate === date);
+
       const entry: MilestoneEntry = {
         snapshotId: snapshot.id,
         snapshotDate: snapshot.date,
         name: mapping.roles.name ? String(readCell(row, mapping.roles.name) ?? "") : "",
-        date: mapping.roles.finish ? toIsoDate(readCell(row, mapping.roles.finish)) : null,
-        startDate: mapping.roles.start ? toIsoDate(readCell(row, mapping.roles.start)) : null,
+        date,
+        startDate,
         percentComplete: mapping.roles.percentComplete
           ? toPercent(readCell(row, mapping.roles.percentComplete))
           : null,
-        isMilestone: mapping.roles.isMilestone
-          ? toBool(readCell(row, mapping.roles.isMilestone))
-          : true,
+        isMilestone: flagged === null ? true : flagged || zeroDuration,
+        group: mapping.roles.group ? String(readCell(row, mapping.roles.group) ?? "").trim() || null : null,
         extra: Object.fromEntries(mapping.extraFields.map((f) => [f, row[f]])),
       };
 
@@ -56,6 +64,20 @@ export function headerSignatureOf(snapshot: Snapshot): string {
 /** Latest entry (most recent snapshot) for a milestone — used for "current state" views. */
 export function latestEntry(m: Milestone): MilestoneEntry | undefined {
   return m.entries[m.entries.length - 1];
+}
+
+/**
+ * A manual override (set from "Manage milestones") always wins. Otherwise, the
+ * "milestones only" display toggle decides based on the row's own spreadsheet flag.
+ */
+export function isEntryVisible(
+  uid: string,
+  entryIsMilestone: boolean,
+  milestonesOnly: boolean,
+  overrides: Record<string, boolean>
+): boolean {
+  if (uid in overrides) return overrides[uid];
+  return milestonesOnly ? entryIsMilestone : true;
 }
 
 export type MilestoneStatus = "on-track" | "slipped" | "pulled-in" | "done" | "unknown";
