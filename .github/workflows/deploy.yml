@@ -2,7 +2,13 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    # The github-pages environment's branch policy only permits
+    # claude/milestone-tracker-excel-3oy2ab (it was the default branch when Pages
+    # was enabled, and that policy is stored by name, so switching the default
+    # branch to main didn't update it). Deploys from main are rejected at the
+    # environment gate before any step runs. Once the policy allows main, this
+    # can drop back to [main] alone.
+    branches: [main, claude/milestone-tracker-excel-3oy2ab]
   workflow_dispatch:
 
 permissions:
