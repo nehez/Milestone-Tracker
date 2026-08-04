@@ -28,6 +28,8 @@ const BAND_HEIGHT = 44;
 const LANE_BOTTOM_PAD = 14;
 const LABEL_MIN_GAP_PX = 118;
 const LANE_LABEL_WIDTH = 128;
+const LABEL_WIDTH = 112;
+const LABEL_EDGE_PAD = 4;
 
 interface MarkerData {
   milestone: Milestone;
@@ -36,12 +38,23 @@ interface MarkerData {
   deltaDays: number;
 }
 
+/** Non-milestone items with a real Start/Finish span render as a duration bar instead of a point. */
+function isBarMarker(m: MarkerData): boolean {
+  return !m.entry.isMilestone && Boolean(m.entry.startDate) && m.entry.startDate !== m.entry.date;
+}
+
+/** Where a marker's label/connector anchors horizontally: the point for a milestone, the midpoint for a bar. */
+function markerAnchorX(m: MarkerData, x: (iso: string) => number): number {
+  if (isBarMarker(m)) return (x(m.entry.startDate!) + x(m.entry.date!)) / 2;
+  return x(m.entry.date!);
+}
+
 function assignBands(markers: MarkerData[], x: (iso: string) => number) {
-  const sorted = [...markers].sort((a, b) => x(a.entry.date!) - x(b.entry.date!));
+  const sorted = [...markers].sort((a, b) => markerAnchorX(a, x) - markerAnchorX(b, x));
   const bandLastX: number[] = [];
   const assigned = new Map<string, number>();
   for (const m of sorted) {
-    const mx = x(m.entry.date!);
+    const mx = markerAnchorX(m, x);
     let band = 0;
     while (bandLastX[band] !== undefined && mx - bandLastX[band] < LABEL_MIN_GAP_PX) band++;
     bandLastX[band] = mx;
@@ -212,56 +225,121 @@ export function Timeline({ milestones, snapshots, activeSnapshotIndex, displayOp
                 )}
                 <line x1={0} y1={lane.baselineY} x2={width} y2={lane.baselineY} stroke="#d0d7de" strokeWidth={2} />
 
-                {lane.markers.map(({ milestone, entry, status, deltaDays }) => {
-                  const mx = x(entry.date!);
+                {lane.markers.map((m) => {
+                  const { milestone, entry, status, deltaDays } = m;
                   const band = lane.bands.get(milestone.uid) ?? 0;
                   const labelY = lane.baselineY + LANE_LABEL_GAP + band * BAND_HEIGHT;
                   const color = STATUS_COLOR[status];
-                  return (
-                    <motion.g
-                      key={milestone.uid}
-                      animate={{ x: mx }}
-                      initial={{ x: mx }}
-                      transition={{ type: "spring", stiffness: 90, damping: 16 }}
-                    >
-                      <line x1={0} y1={lane.baselineY} x2={0} y2={labelY - 10} stroke={color} strokeWidth={1} opacity={0.5} />
-                      <rect
-                        x={-6}
-                        y={lane.baselineY - 6}
-                        width={12}
-                        height={12}
-                        fill={color}
-                        transform={`rotate(45 0 ${lane.baselineY})`}
-                      />
-                      <foreignObject x={-56} y={labelY - 12} width={112} height={BAND_HEIGHT}>
-                        <div className="text-center leading-tight">
-                          {displayOptions.showName && (
-                            <div className="truncate text-[11px] font-medium text-ink" title={entry.name}>
-                              {entry.name || "(untitled)"}
+                  const anchorX = markerAnchorX(m, x);
+                  // Labels are wide (112px) relative to their anchor point, so a marker near
+                  // either edge of the chart would center a label partly off-canvas. html2canvas
+                  // doesn't reliably paint that overflow (unlike a live browser), so clamp the
+                  // label's own position to stay fully in-bounds; the connector bends to reach it.
+                  const labelX = Math.min(
+                    Math.max(anchorX - LABEL_WIDTH / 2, LABEL_EDGE_PAD),
+                    width - LABEL_WIDTH - LABEL_EDGE_PAD
+                  );
+                  const dateText = isBarMarker(m)
+                    ? `${formatDate(entry.startDate, false)} – ${formatDate(entry.date)}`
+                    : formatDate(entry.date);
+
+                  const label = (
+                    <foreignObject x={0} y={labelY - 12} width={LABEL_WIDTH} height={BAND_HEIGHT}>
+                      <div className="text-center leading-tight">
+                        {displayOptions.showName && (
+                          <div className="truncate text-[11px] font-medium text-ink" title={entry.name}>
+                            {entry.name || "(untitled)"}
+                          </div>
+                        )}
+                        {displayOptions.showDate && <div className="text-[10px] text-slate">{dateText}</div>}
+                        {displayOptions.showPercentComplete && entry.percentComplete !== null && (
+                          <div className="text-[10px] text-slate">{entry.percentComplete}%</div>
+                        )}
+                        {status === "slipped" && (
+                          <div className="text-[10px] font-medium text-late">+{deltaDays}d</div>
+                        )}
+                        {status === "pulled-in" && (
+                          <div className="text-[10px] font-medium text-good">{deltaDays}d</div>
+                        )}
+                        {displayOptions.visibleExtraFields.map((f) =>
+                          entry.extra[f] !== undefined && entry.extra[f] !== null && entry.extra[f] !== "" ? (
+                            <div key={f} className="truncate text-[10px] text-slate">
+                              {String(entry.extra[f])}
                             </div>
-                          )}
-                          {displayOptions.showDate && (
-                            <div className="text-[10px] text-slate">{formatDate(entry.date)}</div>
-                          )}
-                          {displayOptions.showPercentComplete && entry.percentComplete !== null && (
-                            <div className="text-[10px] text-slate">{entry.percentComplete}%</div>
-                          )}
-                          {status === "slipped" && (
-                            <div className="text-[10px] font-medium text-late">+{deltaDays}d</div>
-                          )}
-                          {status === "pulled-in" && (
-                            <div className="text-[10px] font-medium text-good">{deltaDays}d</div>
-                          )}
-                          {displayOptions.visibleExtraFields.map((f) =>
-                            entry.extra[f] !== undefined && entry.extra[f] !== null && entry.extra[f] !== "" ? (
-                              <div key={f} className="truncate text-[10px] text-slate">
-                                {String(entry.extra[f])}
-                              </div>
-                            ) : null
-                          )}
-                        </div>
-                      </foreignObject>
+                          ) : null
+                        )}
+                      </div>
+                    </foreignObject>
+                  );
+
+                  const springTransition = { type: "spring" as const, stiffness: 90, damping: 16 };
+
+                  const connector = (
+                    <motion.line
+                      animate={{ x1: anchorX, x2: labelX + LABEL_WIDTH / 2 }}
+                      initial={{ x1: anchorX, x2: labelX + LABEL_WIDTH / 2 }}
+                      transition={springTransition}
+                      y1={lane.baselineY}
+                      y2={labelY - 10}
+                      stroke={color}
+                      strokeWidth={1}
+                      opacity={0.5}
+                    />
+                  );
+
+                  const labelGroup = (
+                    <motion.g animate={{ x: labelX }} initial={{ x: labelX }} transition={springTransition}>
+                      {label}
                     </motion.g>
+                  );
+
+                  if (isBarMarker(m)) {
+                    const xStart = x(entry.startDate!);
+                    const xEnd = x(entry.date!);
+                    const barWidth = Math.max(xEnd - xStart, 4);
+                    const fillWidth =
+                      entry.percentComplete !== null ? barWidth * (entry.percentComplete / 100) : barWidth;
+                    return (
+                      <g key={milestone.uid}>
+                        <motion.rect
+                          animate={{ x: xStart, width: barWidth }}
+                          initial={{ x: xStart, width: barWidth }}
+                          transition={springTransition}
+                          y={lane.baselineY - 4}
+                          height={8}
+                          rx={4}
+                          fill="#d0d7de"
+                        />
+                        <motion.rect
+                          animate={{ x: xStart, width: fillWidth }}
+                          initial={{ x: xStart, width: fillWidth }}
+                          transition={springTransition}
+                          y={lane.baselineY - 4}
+                          height={8}
+                          rx={4}
+                          fill={color}
+                        />
+                        {connector}
+                        {labelGroup}
+                      </g>
+                    );
+                  }
+
+                  return (
+                    <g key={milestone.uid}>
+                      <motion.g animate={{ x: anchorX }} initial={{ x: anchorX }} transition={springTransition}>
+                        <rect
+                          x={-6}
+                          y={lane.baselineY - 6}
+                          width={12}
+                          height={12}
+                          fill={color}
+                          transform={`rotate(45 0 ${lane.baselineY})`}
+                        />
+                      </motion.g>
+                      {connector}
+                      {labelGroup}
+                    </g>
                   );
                 })}
               </g>
