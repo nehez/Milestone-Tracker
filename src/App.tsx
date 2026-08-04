@@ -39,7 +39,7 @@ function App() {
   return (
     <div className="min-h-full">
       <header className="border-b border-line bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-y-2 px-6 py-4">
           <div>
             <div className="flex items-baseline gap-2">
               <h1 className="text-lg font-semibold text-ink">Milestone Tracker</h1>
@@ -50,7 +50,7 @@ function App() {
             <p className="text-xs text-slate">Everything stays in this browser &mdash; nothing is uploaded.</p>
           </div>
           {hasData && (
-            <div className="relative flex items-center gap-2">
+            <div className="relative flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setShowManage(true)}
                 className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink hover:bg-gray-50"
