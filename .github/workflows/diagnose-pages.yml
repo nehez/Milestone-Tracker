@@ -1,0 +1,35 @@
+name: Diagnose Pages config
+
+# Temporary diagnostic: reads Pages + environment settings from inside Actions,
+# where the GitHub API is reachable. Delete once the deploy is working.
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-pages.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pages config
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== GET /pages ==="
+          gh api "repos/${{ github.repository }}/pages" || echo "(failed)"
+          echo
+          echo "=== GET /environments ==="
+          gh api "repos/${{ github.repository }}/environments" || echo "(failed)"
+          echo
+          echo "=== GET /environments/github-pages ==="
+          gh api "repos/${{ github.repository }}/environments/github-pages" || echo "(failed)"
+          echo
+          echo "=== GET deployment-branch-policies ==="
+          gh api "repos/${{ github.repository }}/environments/github-pages/deployment-branch-policies" || echo "(failed)"
+          echo
+          echo "=== default branch ==="
+          gh api "repos/${{ github.repository }}" --jq '.default_branch, .private, .has_pages'
