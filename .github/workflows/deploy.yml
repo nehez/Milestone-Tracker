@@ -6,9 +6,12 @@ on:
     # claude/milestone-tracker-excel-3oy2ab (it was the default branch when Pages
     # was enabled, and that policy is stored by name, so switching the default
     # branch to main didn't update it). Deploys from main are rejected at the
-    # environment gate before any step runs. Once the policy allows main, this
-    # can drop back to [main] alone.
-    branches: [main, claude/milestone-tracker-excel-3oy2ab]
+    # environment gate before any step runs — and worse, since this workflow
+    # shares one concurrency group, a losing main run would cancel an
+    # in-progress (successful) run from this branch if it landed second. Only
+    # trigger from the branch that can actually deploy. Add main back once the
+    # environment's Deployment branches list is updated to allow it.
+    branches: [claude/milestone-tracker-excel-3oy2ab]
   workflow_dispatch:
 
 permissions:
