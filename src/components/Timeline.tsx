@@ -10,9 +10,12 @@ import {
   markerAnchorX,
   resolveLayout,
   springTransition,
+  truncateToWidth,
+  verticalCenterY,
 } from "./timelineShared";
 import type { LaneGroup, MarkerData } from "./timelineShared";
 import {
+  LANE_FONT_SIZE,
   ROWS_HEADER_HEIGHT,
   TimelineRowsChart,
   TimelineRowsNameColumn,
@@ -195,29 +198,49 @@ export function Timeline({
           />
         )}
         {mode === "compact" && isGrouped && (
+          // Drawn as SVG text rather than HTML+CSS-transform: html2canvas doesn't
+          // reliably apply CSS transforms (used here to vertically center the label
+          // on the lane's baseline), so the PDF/PNG export rendered top-justified
+          // and clipped. SVG <text> rasterizes identically on screen and in export.
           <div className="w-32 flex-shrink-0 border-r border-line" style={{ width: LANE_LABEL_WIDTH }}>
-            <div style={{ height: HEADER_HEIGHT }} />
-            {lanes.map((lane, i) => (
-              <div
-                key={lane.key}
-                style={{
-                  height: lane.height,
-                  backgroundColor: laneBandColor(i),
-                }}
-                className="relative border-t border-line first:border-t-0"
-              >
-                {/* Positioned to sit exactly on the lane's baseline (LANE_BASELINE_PAD from the
-                    lane top), matching where markers actually sit, rather than centered in the
-                    lane's full height (which is mostly label whitespace below the baseline). */}
-                <span
-                  className="absolute left-3 -translate-y-1/2 truncate text-xs font-medium text-slate"
-                  style={{ top: LANE_BASELINE_PAD, width: LANE_LABEL_WIDTH - 24 }}
-                  title={lane.label ?? ""}
-                >
-                  {lane.label}
-                </span>
-              </div>
-            ))}
+            <svg width={LANE_LABEL_WIDTH} height={compactHeight} className="block">
+              {lanes.map((lane, i) => {
+                const bg = laneBandColor(i);
+                return bg ? (
+                  <rect key={`bg-${lane.key}`} x={0} y={lane.top} width={LANE_LABEL_WIDTH} height={lane.height} fill={bg} />
+                ) : null;
+              })}
+              {lanes.map((lane) => (
+                <line
+                  key={`sep-${lane.key}`}
+                  x1={0}
+                  y1={lane.top}
+                  x2={LANE_LABEL_WIDTH}
+                  y2={lane.top}
+                  stroke="#d0d7de"
+                  strokeWidth={1}
+                />
+              ))}
+              {lanes.map((lane) => {
+                // Positioned to sit exactly on the lane's baseline (LANE_BASELINE_PAD from
+                // the lane top), matching where markers actually sit, rather than centered
+                // in the lane's full height (which is mostly label whitespace below it).
+                const text = truncateToWidth(lane.label ?? "", LANE_FONT_SIZE, LANE_LABEL_WIDTH - 24);
+                return (
+                  <text
+                    key={lane.key}
+                    x={12}
+                    y={verticalCenterY(lane.top + LANE_BASELINE_PAD, LANE_FONT_SIZE)}
+                    fontSize={LANE_FONT_SIZE}
+                    fontWeight={500}
+                    fill="#57606a"
+                  >
+                    {text}
+                    <title>{lane.label}</title>
+                  </text>
+                );
+              })}
+            </svg>
           </div>
         )}
 

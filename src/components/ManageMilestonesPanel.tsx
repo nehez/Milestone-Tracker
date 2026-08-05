@@ -29,6 +29,11 @@ export function ManageMilestonesPanel({ summaries, onSetOverride, onClose }: Pro
   const scopedCount = summaries.filter((s) => s.flagged || s.override !== undefined).length;
   const hiddenByScope = summaries.length - scopedCount;
 
+  // A single toggle: once every currently-listed item is visible, the button flips to
+  // "Deselect all"; otherwise it offers to select everything currently in view (i.e.
+  // respecting the active search/scope filters, not the full unfiltered list).
+  const allVisible = filtered.length > 0 && filtered.every((s) => s.override ?? s.flagged);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-xl">
@@ -54,6 +59,25 @@ export function ManageMilestonesPanel({ summaries, onSetOverride, onClose }: Pro
             placeholder={showAll ? "Search all tasks by name…" : "Search milestones by name…"}
             className="flex-1 rounded-md border border-line px-3 py-1.5 text-sm"
           />
+          <button
+            onClick={() => filtered.forEach((s) => onSetOverride(s.uid, !allVisible))}
+            disabled={filtered.length === 0}
+            className="flex flex-shrink-0 items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-slate hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            title={allVisible ? "Deselect all" : "Select all"}
+          >
+            <span
+              className={`flex h-3.5 w-3.5 items-center justify-center rounded-sm border ${
+                allVisible ? "border-accent bg-accent text-white" : "border-slate"
+              }`}
+            >
+              {allVisible && (
+                <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="none">
+                  <path d="M2 6l2.5 2.5L10 3" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </span>
+            {allVisible ? "Deselect all" : "Select all"}
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 py-2">

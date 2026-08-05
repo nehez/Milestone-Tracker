@@ -2,7 +2,14 @@ import { motion } from "framer-motion";
 import { formatDate } from "../lib/dateScale";
 import type { DisplayOptions } from "../types";
 import type { LaneGroup, MarkerData } from "./timelineShared";
-import { STATUS_COLOR, hasMovement, isBarMarker, springTransition } from "./timelineShared";
+import {
+  STATUS_COLOR,
+  hasMovement,
+  isBarMarker,
+  springTransition,
+  truncateToWidth,
+  verticalCenterY,
+} from "./timelineShared";
 import { MovementGhost } from "./MovementGhost";
 
 // Wide enough for a full real-world milestone title (e.g. "SVT MS: Blipty Squat Y
@@ -64,16 +71,10 @@ interface NameColumnProps {
   onSelectMilestone: (milestone: MarkerData["milestone"]) => void;
 }
 
-const NAME_FONT_SIZE = 11.5;
-const LANE_FONT_SIZE = 10.5;
+export const NAME_FONT_SIZE = 11.5;
+export const LANE_FONT_SIZE = 10.5;
 const NAME_INDENT = 20;
 const LANE_INDENT = 12;
-
-/** Rough average glyph width for the UI font, used to fit names to the column. */
-function truncateToWidth(text: string, fontSize: number, availableWidth: number): string {
-  const maxChars = Math.floor(availableWidth / (fontSize * 0.55));
-  return text.length <= maxChars ? text : `${text.slice(0, Math.max(0, maxChars - 1))}…`;
-}
 
 /**
  * Name column: full titles get their own dedicated space instead of competing for
@@ -124,7 +125,7 @@ export function TimelineRowsNameColumn({ rows, svgHeight, laneBandColor, onSelec
               )}
               <text
                 x={indent}
-                y={row.top + row.height / 2 + fontSize * 0.35}
+                y={verticalCenterY(row.top + row.height / 2, fontSize)}
                 fontSize={fontSize}
                 fill={isLane ? "#57606a" : "#1c2128"}
                 fontWeight={isLane ? 600 : 400}

@@ -68,3 +68,14 @@ export function resolveLayout(layout: TimelineLayout, markers: MarkerData[]): "c
   const longest = markers.reduce((max, m) => Math.max(max, (m.entry.name ?? "").length), 0);
   return longest > AUTO_ROWS_NAME_LENGTH ? "rows" : "compact";
 }
+
+/** Rough average glyph width for the UI font, used to fit names into a fixed-width SVG column. */
+export function truncateToWidth(text: string, fontSize: number, availableWidth: number): string {
+  const maxChars = Math.floor(availableWidth / (fontSize * 0.55));
+  return text.length <= maxChars ? text : `${text.slice(0, Math.max(0, maxChars - 1))}…`;
+}
+
+/** SVG <text> y for a glyph vertically centered on centerY — text y is the glyph baseline, not its middle. */
+export function verticalCenterY(centerY: number, fontSize: number): number {
+  return centerY + fontSize * 0.35;
+}
