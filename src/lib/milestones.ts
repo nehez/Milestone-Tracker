@@ -1,4 +1,4 @@
-import { toBool, toIsoDate, toPercent } from "./excel";
+import { toBool, toIsoDate, toNumber, toPercent } from "./excel";
 import type { ColumnMapping, Milestone, MilestoneEntry, RawRow, Snapshot } from "../types";
 
 /** Builds UID-keyed milestone histories from a set of snapshots, each with its own column mapping. */
@@ -37,6 +37,7 @@ export function buildMilestones(
           : null,
         isMilestone: flagged === null ? true : flagged || zeroDuration,
         group: mapping.roles.group ? String(readCell(row, mapping.roles.group) ?? "").trim() || null : null,
+        slack: mapping.roles.slack ? toNumber(readCell(row, mapping.roles.slack)) : null,
         extra: Object.fromEntries(mapping.extraFields.map((f) => [f, row[f]])),
       };
 
@@ -80,21 +81,33 @@ export function isEntryVisible(
   return milestonesOnly ? entryIsMilestone : true;
 }
 
-export type MilestoneStatus = "on-track" | "slipped" | "pulled-in" | "done" | "unknown";
+export type MilestoneStatus = "on-track" | "critical" | "done" | "unknown";
 
-/** Compares the first and latest snapshot dates to classify how a milestone has moved. */
+/**
+ * Coloring by "has this date moved at all" flags nearly every item on a real schedule,
+ * since a few days of drift is normal noise rather than a problem — the ghost overlay
+ * already shows that movement visually. Instead, "critical" reads the schedule's own
+ * Total Slack: 0 or negative means the item is on the critical path (MS Project's own
+ * definition), which is a meaningful, threshold-free signal for what actually needs
+ * attention. deltaDays (first snapshot's date vs. the latest) is still returned for
+ * display as a neutral fact, independent of the critical/on-track color.
+ */
 export function statusOf(m: Milestone): { status: MilestoneStatus; deltaDays: number } {
   const first = m.entries[0];
   const last = latestEntry(m);
   if (!first || !last) return { status: "unknown", deltaDays: 0 };
+
+  const deltaDays =
+    first.date && last.date
+      ? Math.round((new Date(last.date).getTime() - new Date(first.date).getTime()) / 86_400_000)
+      : 0;
+
   if (last.percentComplete !== null && last.percentComplete >= 100) {
-    return { status: "done", deltaDays: 0 };
+    return { status: "done", deltaDays };
   }
   if (!first.date || !last.date) return { status: "unknown", deltaDays: 0 };
-  const deltaDays = Math.round(
-    (new Date(last.date).getTime() - new Date(first.date).getTime()) / 86_400_000
-  );
-  if (deltaDays > 0) return { status: "slipped", deltaDays };
-  if (deltaDays < 0) return { status: "pulled-in", deltaDays };
-  return { status: "on-track", deltaDays: 0 };
+  if (last.slack !== null && last.slack <= 0) {
+    return { status: "critical", deltaDays };
+  }
+  return { status: "on-track", deltaDays };
 }

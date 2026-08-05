@@ -108,8 +108,17 @@ export function MilestoneDetailModal({ milestone, onClose }: Props) {
             <h2 className="text-base font-semibold text-ink">{latest.name || "(untitled)"}</h2>
             <p className="mt-0.5 text-xs text-slate">
               Currently {formatDate(latest.date)}
-              {status === "slipped" && <span className="ml-1 font-medium text-late">(+{deltaDays}d vs. baseline)</span>}
-              {status === "pulled-in" && <span className="ml-1 font-medium text-good">({deltaDays}d vs. baseline)</span>}
+              {status === "critical" && (
+                <span className="ml-1 font-medium text-late">
+                  (critical{deltaDays !== 0 ? ` · ${deltaDays > 0 ? "+" : ""}${deltaDays}d vs. baseline` : ""})
+                </span>
+              )}
+              {status === "on-track" && deltaDays !== 0 && (
+                <span className="ml-1 text-slate">
+                  ({deltaDays > 0 ? "+" : ""}
+                  {deltaDays}d vs. baseline)
+                </span>
+              )}
               {status === "done" && <span className="ml-1 font-medium text-done">(done)</span>}
             </p>
           </div>

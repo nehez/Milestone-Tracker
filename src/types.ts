@@ -5,7 +5,8 @@ export type FieldRole =
   | "finish"
   | "percentComplete"
   | "isMilestone"
-  | "group";
+  | "group"
+  | "slack";
 
 export const FIELD_ROLES: { role: FieldRole; label: string; required: boolean; hint?: string }[] = [
   { role: "uid", label: "Unique ID (UID)", required: true },
@@ -24,6 +25,12 @@ export const FIELD_ROLES: { role: FieldRole; label: string; required: boolean; h
     label: "Group / swimlane (optional)",
     required: false,
     hint: "Splits the timeline into horizontal lanes by this column (e.g. phase, workstream, summary task) so a busy schedule doesn't crowd onto one line. Leave unset for a single timeline line.",
+  },
+  {
+    role: "slack",
+    label: "Total Slack (optional)",
+    required: false,
+    hint: "Marks an item critical (colored) when slack is 0 or negative, i.e. on the critical path — instead of coloring by how much a date has moved, which flags nearly everything on a schedule with any drift. Leave unset to skip critical-path coloring; date movement is still visible via the ghost overlay.",
   },
 ];
 
@@ -60,6 +67,8 @@ export interface MilestoneEntry {
   percentComplete: number | null;
   isMilestone: boolean;
   group: string | null;
+  /** Total Slack in days, from the `slack` role. <= 0 means on the critical path. */
+  slack: number | null;
   extra: Record<string, string | number | boolean | null | undefined>;
 }
 

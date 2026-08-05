@@ -66,6 +66,17 @@ export function toPercent(value: unknown): number | null {
   return null;
 }
 
+/** Coerces a duration-like cell (plain number, or a string like "5 days"/"-3 edays") to a number. */
+export function toNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const match = value.trim().match(/-?\d+(\.\d+)?/);
+    return match ? Number(match[0]) : null;
+  }
+  return null;
+}
+
 export function toBool(value: unknown): boolean {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;

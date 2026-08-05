@@ -228,6 +228,7 @@ export function TimelineRowsChart({
           const { entry, status, deltaDays } = m;
           const midY = row.top + row.height / 2;
           const color = STATUS_COLOR[status];
+          const done = status === "done";
           const bar = isBarMarker(m);
           const markerX = bar ? x(entry.startDate!) : x(entry.date!);
           const barWidth = bar ? Math.max(x(entry.date!) - x(entry.startDate!), 4) : 0;
@@ -338,7 +339,9 @@ export function TimelineRowsChart({
                     y={midY - 5}
                     width={10}
                     height={10}
-                    fill={color}
+                    fill={done ? color : "white"}
+                    stroke={color}
+                    strokeWidth={done ? 0 : 2}
                     transform={`rotate(45 0 ${midY})`}
                   />
                 </motion.g>
@@ -354,14 +357,10 @@ export function TimelineRowsChart({
                 fill="#57606a"
               >
                 {parts.join("  ·  ")}
-                {status === "slipped" && (
-                  <tspan fill="#cf222e" fontWeight={600}>
-                    {parts.length ? "  ·  " : ""}+{deltaDays}d
-                  </tspan>
-                )}
-                {status === "pulled-in" && (
-                  <tspan fill="#1a7f37" fontWeight={600}>
+                {status !== "done" && deltaDays !== 0 && (
+                  <tspan fill="#57606a">
                     {parts.length ? "  ·  " : ""}
+                    {deltaDays > 0 ? "+" : ""}
                     {deltaDays}d
                   </tspan>
                 )}

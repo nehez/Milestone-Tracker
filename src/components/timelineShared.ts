@@ -4,8 +4,7 @@ import type { Milestone, MilestoneEntry, TimelineLayout } from "../types";
 
 export const STATUS_COLOR: Record<string, string> = {
   "on-track": "#2f6feb",
-  slipped: "#cf222e",
-  "pulled-in": "#1a7f37",
+  critical: "#cf222e",
   done: "#6e7781",
   unknown: "#9aa4b2",
 };

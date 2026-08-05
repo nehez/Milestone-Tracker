@@ -36,6 +36,21 @@ export function DisplayOptionsPanel({ options, allExtraFields, hasSwimlanes, onC
         </button>
       </div>
 
+      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate">Marker colors</p>
+      <div className="mb-3 space-y-1 text-xs text-slate">
+        <p className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[1px] bg-[#6e7781]" /> Done (100%)
+        </p>
+        <p className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[1px] border-2 border-[#cf222e] bg-white" />{" "}
+          Critical (Total Slack ≤ 0, if mapped)
+        </p>
+        <p className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[1px] border-2 border-[#2f6feb] bg-white" />{" "}
+          On track — everything else. Date movement shows via the ghost overlay below, not color.
+        </p>
+      </div>
+
       <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate">Layout</p>
       <div className="mb-1 flex rounded-md border border-line p-0.5">
         {LAYOUT_CHOICES.map((choice) => (

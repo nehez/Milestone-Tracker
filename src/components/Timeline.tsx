@@ -311,6 +311,7 @@ export function Timeline({
                   const band = lane.bands.get(milestone.uid) ?? 0;
                   const labelY = lane.baselineY + LANE_LABEL_GAP + band * BAND_HEIGHT;
                   const color = STATUS_COLOR[status];
+                  const done = status === "done";
                   const anchorX = markerAnchorX(m, x);
                   // Labels are wide (112px) relative to their anchor point, so a marker near
                   // either edge of the chart would center a label partly off-canvas. html2canvas
@@ -336,11 +337,11 @@ export function Timeline({
                         {displayOptions.showPercentComplete && entry.percentComplete !== null && (
                           <div className="text-[10px] text-slate">{entry.percentComplete}%</div>
                         )}
-                        {status === "slipped" && (
-                          <div className="text-[10px] font-medium text-late">+{deltaDays}d</div>
-                        )}
-                        {status === "pulled-in" && (
-                          <div className="text-[10px] font-medium text-good">{deltaDays}d</div>
+                        {status !== "done" && deltaDays !== 0 && (
+                          <div className="text-[10px] text-slate">
+                            {deltaDays > 0 ? "+" : ""}
+                            {deltaDays}d
+                          </div>
                         )}
                         {displayOptions.visibleExtraFields.map((f) =>
                           entry.extra[f] !== undefined && entry.extra[f] !== null && entry.extra[f] !== "" ? (
@@ -445,7 +446,9 @@ export function Timeline({
                           y={lane.baselineY - 6}
                           width={12}
                           height={12}
-                          fill={color}
+                          fill={done ? color : "white"}
+                          stroke={color}
+                          strokeWidth={done ? 0 : 2}
                           transform={`rotate(45 0 ${lane.baselineY})`}
                         />
                       </motion.g>
