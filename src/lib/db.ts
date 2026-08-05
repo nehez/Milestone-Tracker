@@ -6,10 +6,11 @@ interface MilestoneTrackerDB extends DBSchema {
   mappings: { key: string; value: ColumnMapping };
   settings: { key: string; value: AppSettings };
   overrides: { key: string; value: MilestoneOverride };
+  folderHandle: { key: string; value: FileSystemDirectoryHandle };
 }
 
 const DB_NAME = "milestone-tracker";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase<MilestoneTrackerDB>> | null = null;
 
@@ -24,6 +25,9 @@ function getDb() {
         }
         if (oldVersion < 2) {
           db.createObjectStore("overrides", { keyPath: "uid" });
+        }
+        if (oldVersion < 3) {
+          db.createObjectStore("folderHandle");
         }
       },
     });
@@ -82,6 +86,21 @@ export async function loadOverrides(): Promise<MilestoneOverride[]> {
   return db.getAll("overrides");
 }
 
+export async function saveFolderHandle(handle: FileSystemDirectoryHandle): Promise<void> {
+  const db = await getDb();
+  await db.put("folderHandle", handle, "watched-folder");
+}
+
+export async function loadFolderHandle(): Promise<FileSystemDirectoryHandle | undefined> {
+  const db = await getDb();
+  return db.get("folderHandle", "watched-folder");
+}
+
+export async function clearFolderHandle(): Promise<void> {
+  const db = await getDb();
+  await db.delete("folderHandle", "watched-folder");
+}
+
 export async function clearAllData(): Promise<void> {
   const db = await getDb();
   await Promise.all([
@@ -89,5 +108,6 @@ export async function clearAllData(): Promise<void> {
     db.clear("mappings"),
     db.clear("settings"),
     db.clear("overrides"),
+    db.clear("folderHandle"),
   ]);
 }

@@ -1,12 +1,14 @@
 import { useRef, useState } from "react";
 import { useAppData } from "./lib/useAppData";
 import { UploadDropzone } from "./components/UploadDropzone";
+import { FolderConnect } from "./components/FolderConnect";
 import { AddSnapshotModal } from "./components/AddSnapshotModal";
 import { SnapshotList } from "./components/SnapshotList";
 import { Timeline } from "./components/Timeline";
 import { Scrubber } from "./components/Scrubber";
 import { DisplayOptionsPanel } from "./components/DisplayOptionsPanel";
 import { ManageMilestonesPanel } from "./components/ManageMilestonesPanel";
+import { ColumnMappingPanel } from "./components/ColumnMappingPanel";
 import { MilestoneDetailModal } from "./components/MilestoneDetailModal";
 import { exportAsImage, exportAsPdf } from "./lib/exportImage";
 import { headerSignature } from "./lib/columnMapping";
@@ -18,6 +20,7 @@ function App() {
   const [activeSnapshotIndex, setActiveSnapshotIndex] = useState(0);
   const [showOptions, setShowOptions] = useState(false);
   const [showManage, setShowManage] = useState(false);
+  const [showMapping, setShowMapping] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null);
   const exportRef = useRef<HTMLDivElement>(null);
@@ -60,6 +63,12 @@ function App() {
                 className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink hover:bg-gray-50"
               >
                 Manage milestones
+              </button>
+              <button
+                onClick={() => setShowMapping(true)}
+                className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink hover:bg-gray-50"
+              >
+                Column mapping
               </button>
               <button
                 onClick={() => setShowOptions((s) => !s)}
@@ -120,6 +129,17 @@ function App() {
               drop the file above. Upload more exports later to track how milestones move over
               time.
             </p>
+            <div className="mt-3 text-center">
+              <FolderConnect
+                supported={data.isFolderPickerSupported}
+                watchedFolder={data.watchedFolder}
+                folderPermission={data.folderPermission}
+                scanning={data.folderScanning}
+                onConnect={data.connectFolder}
+                onRescan={data.rescanFolder}
+                onDisconnect={data.disconnectFolder}
+              />
+            </div>
           </div>
         ) : (
           <div className="space-y-6">
@@ -142,7 +162,19 @@ function App() {
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <SnapshotList snapshots={data.snapshots} onRemove={data.removeSnapshot} />
-              <UploadDropzone onFiles={data.addFiles} compact />
+              <div className="flex flex-col items-end gap-2">
+                <UploadDropzone onFiles={data.addFiles} compact />
+                <FolderConnect
+                  supported={data.isFolderPickerSupported}
+                  watchedFolder={data.watchedFolder}
+                  folderPermission={data.folderPermission}
+                  scanning={data.folderScanning}
+                  onConnect={data.connectFolder}
+                  onRescan={data.rescanFolder}
+                  onDisconnect={data.disconnectFolder}
+                  compact
+                />
+              </div>
             </div>
           </div>
         )}
@@ -163,6 +195,15 @@ function App() {
           summaries={data.milestoneSummaries}
           onSetOverride={data.setOverride}
           onClose={() => setShowManage(false)}
+        />
+      )}
+
+      {showMapping && (
+        <ColumnMappingPanel
+          mappings={data.mappings}
+          snapshots={data.snapshots}
+          onUpdateMapping={data.updateMapping}
+          onClose={() => setShowMapping(false)}
         />
       )}
 

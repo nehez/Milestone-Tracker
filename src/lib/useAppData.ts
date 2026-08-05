@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   clearAllData,
+  clearFolderHandle,
   deleteOverride,
   deleteSnapshot,
+  loadFolderHandle,
   loadMapping,
   loadOverrides,
   loadSettings,
   loadSnapshots,
+  saveFolderHandle,
   saveMapping,
   saveOverride,
   saveSettings,
@@ -15,6 +18,7 @@ import {
 import { parseExcelFile } from "./excel";
 import { headerSignature } from "./columnMapping";
 import { buildMilestones, latestEntry } from "./milestones";
+import { isFolderPickerSupported, scanFolderForFiles } from "./folderScan";
 import { DEFAULT_LANE_BAND_COLORS } from "../types";
 import type { AppSettings, ColumnMapping, DisplayOptions, Snapshot } from "../types";
 
@@ -48,6 +52,9 @@ export function useAppData() {
   const [loaded, setLoaded] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [watchedFolder, setWatchedFolder] = useState<FileSystemDirectoryHandle | null>(null);
+  const [folderPermission, setFolderPermission] = useState<PermissionState | null>(null);
+  const [folderScanning, setFolderScanning] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -71,6 +78,17 @@ export function useAppData() {
       for (const [sig, mapping] of entries) if (mapping) map[sig] = mapping;
       setMappings(map);
       setLoaded(true);
+    })();
+
+    // A directory handle survives IndexedDB across reloads, but the browser always
+    // re-checks permission on each page load rather than remembering "granted" — so
+    // this can come back "prompt", requiring a click (via rescanFolder) to reconnect.
+    (async () => {
+      if (!isFolderPickerSupported()) return;
+      const handle = await loadFolderHandle();
+      if (!handle) return;
+      setWatchedFolder(handle);
+      setFolderPermission(await handle.queryPermission({ mode: "read" }));
     })();
   }, []);
 
@@ -119,6 +137,72 @@ export function useAppData() {
 
   const cancelUpload = useCallback((pending: PendingUpload) => {
     setPendingUploads((prev) => prev.filter((p) => p !== pending));
+  }, []);
+
+  /** Re-maps an already-uploaded file shape (e.g. switching which Flag column means "milestone")
+   *  without re-uploading — every snapshot sharing that header signature picks it up immediately. */
+  const updateMapping = useCallback(async (mapping: ColumnMapping) => {
+    await saveMapping(mapping);
+    setMappings((prev) => ({ ...prev, [mapping.signature]: mapping }));
+  }, []);
+
+  // Scans a connected folder and queues only files this app hasn't already ingested
+  // (by file name) — so reconnecting or re-scanning a folder that's still accumulating
+  // new dated exports doesn't re-prompt for ones already added as snapshots.
+  const scanAndQueue = useCallback(
+    async (handle: FileSystemDirectoryHandle) => {
+      setFolderScanning(true);
+      try {
+        const files = await scanFolderForFiles(handle);
+        const known = new Set([...snapshots.map((s) => s.fileName), ...pendingUploads.map((p) => p.fileName)]);
+        const fresh = files.filter((f) => !known.has(f.name));
+        if (fresh.length) await addFiles(fresh);
+        return fresh.length;
+      } finally {
+        setFolderScanning(false);
+      }
+    },
+    [snapshots, pendingUploads, addFiles]
+  );
+
+  const connectFolder = useCallback(async () => {
+    if (!isFolderPickerSupported()) return;
+    setError(null);
+    try {
+      const handle = await window.showDirectoryPicker({ id: "milestone-tracker-folder", mode: "read" });
+      setWatchedFolder(handle);
+      setFolderPermission("granted");
+      // Persisting the handle is a nice-to-have (lets a later reload reconnect
+      // without re-picking) — if IndexedDB can't store it for some reason, the
+      // folder should still work for the rest of this session.
+      try {
+        await saveFolderHandle(handle);
+      } catch {
+        /* non-fatal */
+      }
+      await scanAndQueue(handle);
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") {
+        setError(`Couldn't open that folder: ${(e as Error).message}`);
+      }
+    }
+  }, [scanAndQueue]);
+
+  const rescanFolder = useCallback(async () => {
+    if (!watchedFolder) return 0;
+    // requestPermission only works from a real user gesture (a click), which is
+    // exactly the context this is always called from — never on a timer.
+    let permission = await watchedFolder.queryPermission({ mode: "read" });
+    if (permission !== "granted") permission = await watchedFolder.requestPermission({ mode: "read" });
+    setFolderPermission(permission);
+    if (permission !== "granted") return 0;
+    return scanAndQueue(watchedFolder);
+  }, [watchedFolder, scanAndQueue]);
+
+  const disconnectFolder = useCallback(async () => {
+    await clearFolderHandle();
+    setWatchedFolder(null);
+    setFolderPermission(null);
   }, []);
 
   const removeSnapshot = useCallback(async (id: string) => {
@@ -203,10 +287,18 @@ export function useAppData() {
     addFiles,
     confirmUpload,
     cancelUpload,
+    updateMapping,
     removeSnapshot,
     clearAll,
     error,
     setError,
+    isFolderPickerSupported: isFolderPickerSupported(),
+    watchedFolder,
+    folderPermission,
+    folderScanning,
+    connectFolder,
+    rescanFolder,
+    disconnectFolder,
   };
 }
 
