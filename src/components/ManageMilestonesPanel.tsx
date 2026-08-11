@@ -21,12 +21,17 @@ export function ManageMilestonesPanel({ summaries, onSetOverride, onUnfreeze, on
   const [search, setSearch] = useState("");
   const [showAll, setShowAll] = useState(false);
 
+  const q = search.trim().toLowerCase();
+
   const filtered = useMemo(() => {
-    const base = showAll ? summaries : summaries.filter((s) => s.flagged || s.override !== undefined);
-    const q = search.trim().toLowerCase();
+    // A search is an explicit "find this specific item" — search across every row in
+    // the file, not just the milestone-only scope, or a task you know by name but
+    // that isn't flagged yet would silently never appear no matter what you typed.
+    // The scope toggle only limits the unfiltered browse list.
+    const base = q || showAll ? summaries : summaries.filter((s) => s.flagged || s.override !== undefined);
     if (!q) return base;
     return base.filter((s) => s.name.toLowerCase().includes(q));
-  }, [summaries, showAll, search]);
+  }, [summaries, showAll, q]);
 
   const scopedCount = summaries.filter((s) => s.flagged || s.override !== undefined).length;
   const hiddenByScope = summaries.length - scopedCount;
@@ -58,7 +63,7 @@ export function ManageMilestonesPanel({ summaries, onSetOverride, onUnfreeze, on
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={showAll ? "Search all tasks by name…" : "Search milestones by name…"}
+            placeholder="Search all tasks by name…"
             className="flex-1 rounded-md border border-line px-3 py-1.5 text-sm"
           />
           <button
@@ -101,7 +106,13 @@ export function ManageMilestonesPanel({ summaries, onSetOverride, onUnfreeze, on
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-ink">{s.name}</div>
                     <div className="text-xs text-slate">
-                      {formatDate(s.date)}
+                      {s.date ? (
+                        formatDate(s.date)
+                      ) : (
+                        <span className="text-late" title="No Finish date in its most recent snapshot — nothing to plot, so checking this box alone won't make it appear.">
+                          no date on file — won't show on the timeline
+                        </span>
+                      )}
                       {s.frozen && (
                         <span className="ml-2 text-slate" title="Not pulling further updates — showing its last known state">
                           ❄ frozen &middot;{" "}
@@ -136,7 +147,9 @@ export function ManageMilestonesPanel({ summaries, onSetOverride, onUnfreeze, on
           </label>
           {!showAll && hiddenByScope > 0 && (
             <p className="mt-1 text-xs text-slate">
-              {hiddenByScope} non-milestone task{hiddenByScope === 1 ? "" : "s"} hidden from this list.
+              {q
+                ? "Search looks across every task, milestone or not."
+                : `${hiddenByScope} non-milestone task${hiddenByScope === 1 ? "" : "s"} hidden from this list.`}
             </p>
           )}
         </div>
