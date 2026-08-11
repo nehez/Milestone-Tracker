@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { AppSettings, ColumnMapping, MilestoneOverride, Snapshot } from "../types";
+import type { AppSettings, ColumnMapping, MilestoneOverride, ReviewFlag, Snapshot } from "../types";
 
 interface MilestoneTrackerDB extends DBSchema {
   snapshots: { key: string; value: Snapshot };
@@ -7,10 +7,11 @@ interface MilestoneTrackerDB extends DBSchema {
   settings: { key: string; value: AppSettings };
   overrides: { key: string; value: MilestoneOverride };
   folderHandle: { key: string; value: FileSystemDirectoryHandle };
+  reviewFlags: { key: string; value: ReviewFlag };
 }
 
 const DB_NAME = "milestone-tracker";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let dbPromise: Promise<IDBPDatabase<MilestoneTrackerDB>> | null = null;
 
@@ -28,6 +29,9 @@ function getDb() {
         }
         if (oldVersion < 3) {
           db.createObjectStore("folderHandle");
+        }
+        if (oldVersion < 4) {
+          db.createObjectStore("reviewFlags", { keyPath: "uid" });
         }
       },
     });
@@ -101,6 +105,21 @@ export async function clearFolderHandle(): Promise<void> {
   await db.delete("folderHandle", "watched-folder");
 }
 
+export async function saveReviewFlag(flag: ReviewFlag): Promise<void> {
+  const db = await getDb();
+  await db.put("reviewFlags", flag);
+}
+
+export async function deleteReviewFlag(uid: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("reviewFlags", uid);
+}
+
+export async function loadReviewFlags(): Promise<ReviewFlag[]> {
+  const db = await getDb();
+  return db.getAll("reviewFlags");
+}
+
 export async function clearAllData(): Promise<void> {
   const db = await getDb();
   await Promise.all([
@@ -109,5 +128,6 @@ export async function clearAllData(): Promise<void> {
     db.clear("settings"),
     db.clear("overrides"),
     db.clear("folderHandle"),
+    db.clear("reviewFlags"),
   ]);
 }

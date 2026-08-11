@@ -7,20 +7,22 @@ import {
   loadFolderHandle,
   loadMapping,
   loadOverrides,
+  loadReviewFlags,
   loadSettings,
   loadSnapshots,
   saveFolderHandle,
   saveMapping,
   saveOverride,
+  saveReviewFlag,
   saveSettings,
   saveSnapshot,
 } from "./db";
 import { parseExcelFile } from "./excel";
 import { headerSignature } from "./columnMapping";
-import { buildMilestones, latestEntry } from "./milestones";
+import { applyFreeze, buildMilestones, findNewCandidates, findRemovalCandidates, latestEntry } from "./milestones";
 import { isFolderPickerSupported, scanFolderForFiles } from "./folderScan";
 import { DEFAULT_LANE_BAND_COLORS } from "../types";
-import type { AppSettings, ColumnMapping, DisplayOptions, Snapshot } from "../types";
+import type { AppSettings, ColumnMapping, DisplayOptions, MilestoneOverride, ReviewFlag, Snapshot } from "../types";
 
 const DEFAULT_DISPLAY_OPTIONS: DisplayOptions = {
   showName: true,
@@ -48,7 +50,8 @@ export function useAppData() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [mappings, setMappings] = useState<Record<string, ColumnMapping>>({});
   const [displayOptions, setDisplayOptions] = useState<DisplayOptions>(DEFAULT_DISPLAY_OPTIONS);
-  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [overrides, setOverrides] = useState<Record<string, MilestoneOverride>>({});
+  const [reviewFlags, setReviewFlags] = useState<Record<string, ReviewFlag>>({});
   const [loaded, setLoaded] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -58,15 +61,17 @@ export function useAppData() {
 
   useEffect(() => {
     (async () => {
-      const [snaps, settings, savedOverrides] = await Promise.all([
+      const [snaps, settings, savedOverrides, savedReviewFlags] = await Promise.all([
         loadSnapshots(),
         loadSettings(),
         loadOverrides(),
+        loadReviewFlags(),
       ]);
       setSnapshots(snaps);
       // Merge over defaults so settings saved before a new option existed still load.
       if (settings) setDisplayOptions({ ...DEFAULT_DISPLAY_OPTIONS, ...settings.displayOptions });
-      setOverrides(Object.fromEntries(savedOverrides.map((o) => [o.uid, o.visible])));
+      setOverrides(Object.fromEntries(savedOverrides.map((o) => [o.uid, o])));
+      setReviewFlags(Object.fromEntries(savedReviewFlags.map((f) => [f.uid, f])));
 
       const uniqueSignatures = new Set(
         snaps.map((s) => headerSignature(s.headers))
@@ -225,22 +230,95 @@ export function useAppData() {
     setMappings({});
     setDisplayOptions(DEFAULT_DISPLAY_OPTIONS);
     setOverrides({});
+    setReviewFlags({});
     setPendingUploads([]);
   }, []);
 
-  /** Pin a milestone's visibility, overriding whatever its spreadsheet flag says. Pass undefined to un-pin. */
+  const milestonesRaw = useMemo(() => buildMilestones(snapshots, mappings), [snapshots, mappings]);
+
+  /** Pin a milestone's visibility, overriding whatever its spreadsheet flag says. Pass
+   *  undefined to un-pin. A fresh visibility choice always clears any freeze — if you're
+   *  manually re-deciding an item, stale "frozen at an old snapshot" state shouldn't linger. */
   const setOverride = useCallback((uid: string, visible: boolean | undefined) => {
     setOverrides((prev) => {
       const next = { ...prev };
       if (visible === undefined) delete next[uid];
-      else next[uid] = visible;
+      else next[uid] = { uid, visible };
       return next;
     });
     if (visible === undefined) void deleteOverride(uid);
     else void saveOverride({ uid, visible });
   }, []);
 
-  const milestones = useMemo(() => buildMilestones(snapshots, mappings), [snapshots, mappings]);
+  /** Stops pulling further updates for a tracked milestone, keeping it visible at its
+   *  last known state — for e.g. a completed item whose flag later flips to "No". */
+  const freezeMilestone = useCallback(
+    (uid: string) => {
+      const m = milestonesRaw.find((x) => x.uid === uid);
+      const last = m?.entries[m.entries.length - 1];
+      if (!last) return;
+      setOverrides((prev) => {
+        const override: MilestoneOverride = { uid, visible: true, frozenAtSnapshotId: last.snapshotId };
+        void saveOverride(override);
+        return { ...prev, [uid]: override };
+      });
+    },
+    [milestonesRaw]
+  );
+
+  const unfreezeMilestone = useCallback((uid: string) => {
+    setOverrides((prev) => {
+      const existing = prev[uid];
+      if (!existing) return prev;
+      const override: MilestoneOverride = { uid, visible: existing.visible };
+      void saveOverride(override);
+      return { ...prev, [uid]: override };
+    });
+  }, []);
+
+  /** Bulk-seeds "always tracked" overrides from everything a chosen snapshot flags as a
+   *  milestone — the "use this file as master" shortcut so archived files with reliable
+   *  flags don't need to be curated one row at a time in Manage milestones. */
+  const useSnapshotAsMaster = useCallback(
+    (snapshotId: string) => {
+      for (const m of milestonesRaw) {
+        const entry = m.entries.find((e) => e.snapshotId === snapshotId);
+        if (entry?.isMilestone) setOverride(m.uid, true);
+      }
+    },
+    [milestonesRaw, setOverride]
+  );
+
+  const setReviewFlag = useCallback((uid: string, patch: Partial<Omit<ReviewFlag, "uid">>) => {
+    setReviewFlags((prev) => {
+      const next: ReviewFlag = { ...prev[uid], uid, ...patch };
+      void saveReviewFlag(next);
+      return { ...prev, [uid]: next };
+    });
+  }, []);
+
+  /** Review queue actions. */
+  const addCandidateToMaster = useCallback((uid: string) => setOverride(uid, true), [setOverride]);
+  const ignoreCandidate = useCallback(
+    (uid: string) => setReviewFlag(uid, { candidateDismissed: true }),
+    [setReviewFlag]
+  );
+  const removeFromMaster = useCallback((uid: string) => setOverride(uid, false), [setOverride]);
+  const keepTrackingItem = useCallback(
+    (uid: string, reason: "missing" | "flagged-no") => setReviewFlag(uid, { removalDismissedReason: reason }),
+    [setReviewFlag]
+  );
+
+  const milestones = useMemo(() => applyFreeze(milestonesRaw, overrides), [milestonesRaw, overrides]);
+
+  const newCandidates = useMemo(
+    () => findNewCandidates(milestonesRaw, snapshots, overrides, reviewFlags),
+    [milestonesRaw, snapshots, overrides, reviewFlags]
+  );
+  const removalCandidates = useMemo(
+    () => findRemovalCandidates(milestonesRaw, snapshots, overrides, reviewFlags),
+    [milestonesRaw, snapshots, overrides, reviewFlags]
+  );
 
   const allExtraFields = useMemo(() => {
     const set = new Set<string>();
@@ -264,7 +342,8 @@ export function useAppData() {
             name: latest?.name || "(untitled)",
             date: latest?.date ?? null,
             flagged: latest?.isMilestone ?? true,
-            override: overrides[m.uid],
+            override: overrides[m.uid]?.visible,
+            frozen: Boolean(overrides[m.uid]?.frozenAtSnapshotId),
           };
         })
         .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999")),
@@ -283,6 +362,7 @@ export function useAppData() {
     updateDisplayOptions,
     overrides,
     setOverride,
+    unfreezeMilestone,
     pendingUploads,
     addFiles,
     confirmUpload,
@@ -299,6 +379,14 @@ export function useAppData() {
     connectFolder,
     rescanFolder,
     disconnectFolder,
+    useSnapshotAsMaster,
+    newCandidates,
+    removalCandidates,
+    addCandidateToMaster,
+    ignoreCandidate,
+    removeFromMaster,
+    keepTrackingItem,
+    freezeMilestone,
   };
 }
 

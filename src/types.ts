@@ -66,6 +66,10 @@ export interface MilestoneEntry {
   startDate: string | null;
   percentComplete: number | null;
   isMilestone: boolean;
+  /** Whether this row's snapshot had a flag column mapped at all — distinguishes a
+   *  genuine "Yes"/"No" signal from isMilestone's own default-to-true fallback for
+   *  files with no flag column, which shouldn't count as a real signal for review. */
+  explicitFlag: boolean;
   group: string | null;
   /** Total Slack in days, from the `slack` role. <= 0 means on the critical path. */
   slack: number | null;
@@ -122,4 +126,21 @@ export interface AppSettings {
 export interface MilestoneOverride {
   uid: string;
   visible: boolean;
+  /** If set, this milestone's history is capped at this snapshot — later snapshots'
+   *  entries for this UID are ignored, so it keeps showing at its last known state
+   *  without picking up further changes (e.g. a completed item that later gets
+   *  flagged "No" because the flag meant "still active," not "is a milestone"). */
+  frozenAtSnapshotId?: string;
+}
+
+/** Remembers a resolved review decision for a UID so the same suggestion doesn't keep
+ *  reappearing after you've already said "ignore" or "keep tracking" once. */
+export interface ReviewFlag {
+  uid: string;
+  /** A "new candidate" suggestion (flagged Yes/0-day, not yet tracked) was dismissed. */
+  candidateDismissed?: boolean;
+  /** A "removal candidate" (missing, or explicitly flagged No) was dismissed via "Keep
+   *  tracking" — remembers *why* it was dismissed so a genuinely new reason (e.g. it
+   *  was missing, now it's explicitly flagged No) still surfaces again. */
+  removalDismissedReason?: "missing" | "flagged-no";
 }

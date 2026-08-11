@@ -1,5 +1,13 @@
 import { toBool, toIsoDate, toNumber, toPercent } from "./excel";
-import type { ColumnMapping, Milestone, MilestoneEntry, RawRow, Snapshot } from "../types";
+import type {
+  ColumnMapping,
+  Milestone,
+  MilestoneEntry,
+  MilestoneOverride,
+  RawRow,
+  ReviewFlag,
+  Snapshot,
+} from "../types";
 
 /** Builds UID-keyed milestone histories from a set of snapshots, each with its own column mapping. */
 export function buildMilestones(
@@ -36,6 +44,7 @@ export function buildMilestones(
           ? toPercent(readCell(row, mapping.roles.percentComplete))
           : null,
         isMilestone: flagged === null ? true : flagged || zeroDuration,
+        explicitFlag: flagged !== null,
         group: mapping.roles.group ? String(readCell(row, mapping.roles.group) ?? "").trim() || null : null,
         slack: mapping.roles.slack ? toNumber(readCell(row, mapping.roles.slack)) : null,
         extra: Object.fromEntries(mapping.extraFields.map((f) => [f, row[f]])),
@@ -58,6 +67,19 @@ function readCell(row: RawRow, header: string) {
   return row[header];
 }
 
+/** Caps a frozen milestone's entries at its freeze point — later snapshots may still
+ *  carry a row for that UID, but everything downstream (status, charts, export) should
+ *  only ever see its last known state, not any changes that happened after freezing. */
+export function applyFreeze(milestones: Milestone[], overrides: Record<string, MilestoneOverride>): Milestone[] {
+  return milestones.map((m) => {
+    const frozenAt = overrides[m.uid]?.frozenAtSnapshotId;
+    if (!frozenAt) return m;
+    const idx = m.entries.findIndex((e) => e.snapshotId === frozenAt);
+    if (idx === -1) return m;
+    return { ...m, entries: m.entries.slice(0, idx + 1) };
+  });
+}
+
 export function headerSignatureOf(snapshot: Snapshot): string {
   return [...snapshot.headers].map((h) => h.trim().toLowerCase()).sort().join("|");
 }
@@ -75,9 +97,9 @@ export function isEntryVisible(
   uid: string,
   entryIsMilestone: boolean,
   milestonesOnly: boolean,
-  overrides: Record<string, boolean>
+  overrides: Record<string, MilestoneOverride>
 ): boolean {
-  if (uid in overrides) return overrides[uid];
+  if (uid in overrides) return overrides[uid].visible;
   return milestonesOnly ? entryIsMilestone : true;
 }
 
@@ -110,4 +132,90 @@ export function statusOf(m: Milestone): { status: MilestoneStatus; deltaDays: nu
     return { status: "critical", deltaDays };
   }
   return { status: "on-track", deltaDays };
+}
+
+export interface NewCandidate {
+  uid: string;
+  name: string;
+  date: string | null;
+  sourceFileName: string;
+}
+
+export interface RemovalCandidate {
+  uid: string;
+  name: string;
+  lastDate: string | null;
+  reason: "missing" | "flagged-no";
+  sourceFileName: string;
+}
+
+/**
+ * UIDs with a genuine "this is a milestone" signal (an explicit Yes flag, or a 0-day
+ * task) that aren't tracked yet and haven't already been dismissed. A file with no
+ * flag column mapped never produces a signal here, even though its rows default to
+ * isMilestone=true for display purposes — see MilestoneEntry.explicitFlag.
+ */
+export function findNewCandidates(
+  milestones: Milestone[],
+  snapshots: Snapshot[],
+  overrides: Record<string, MilestoneOverride>,
+  reviewFlags: Record<string, ReviewFlag>
+): NewCandidate[] {
+  const snapshotById = new Map(snapshots.map((s) => [s.id, s]));
+  const result: NewCandidate[] = [];
+  for (const m of milestones) {
+    if (m.uid in overrides) continue;
+    if (reviewFlags[m.uid]?.candidateDismissed) continue;
+    // Most recent entry that actually carried the signal, for a meaningful "found in" file.
+    const signal = [...m.entries].reverse().find((e) => e.explicitFlag && e.isMilestone);
+    if (!signal) continue;
+    const latest = latestEntry(m)!;
+    result.push({
+      uid: m.uid,
+      name: latest.name || "(untitled)",
+      date: latest.date,
+      sourceFileName: snapshotById.get(signal.snapshotId)?.fileName ?? "",
+    });
+  }
+  return result;
+}
+
+/**
+ * Currently-tracked (override.visible, not frozen) UIDs that either dropped out of the
+ * most recent snapshot entirely, or got explicitly flagged No there — treated the same
+ * way, since both mean "this file no longer claims it's a milestone." Checked only
+ * against the latest snapshot: what matters is whether it's still there *now*.
+ */
+export function findRemovalCandidates(
+  milestones: Milestone[],
+  snapshots: Snapshot[],
+  overrides: Record<string, MilestoneOverride>,
+  reviewFlags: Record<string, ReviewFlag>
+): RemovalCandidate[] {
+  const latestSnapshot = snapshots[snapshots.length - 1];
+  if (!latestSnapshot) return [];
+  const milestoneByUid = new Map(milestones.map((m) => [m.uid, m]));
+  const result: RemovalCandidate[] = [];
+
+  for (const [uid, override] of Object.entries(overrides)) {
+    if (!override.visible || override.frozenAtSnapshotId) continue;
+    const m = milestoneByUid.get(uid);
+    const latest = m ? latestEntry(m) : undefined;
+    const inLatestSnapshot = m?.entries.find((e) => e.snapshotId === latestSnapshot.id);
+
+    let reason: RemovalCandidate["reason"] | null = null;
+    if (!inLatestSnapshot) reason = "missing";
+    else if (inLatestSnapshot.explicitFlag && !inLatestSnapshot.isMilestone) reason = "flagged-no";
+    if (!reason) continue;
+
+    if (reviewFlags[uid]?.removalDismissedReason === reason) continue;
+    result.push({
+      uid,
+      name: latest?.name || "(untitled)",
+      lastDate: latest?.date ?? null,
+      reason,
+      sourceFileName: latestSnapshot.fileName,
+    });
+  }
+  return result;
 }

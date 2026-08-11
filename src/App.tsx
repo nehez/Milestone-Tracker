@@ -9,6 +9,7 @@ import { Scrubber } from "./components/Scrubber";
 import { DisplayOptionsPanel } from "./components/DisplayOptionsPanel";
 import { ManageMilestonesPanel } from "./components/ManageMilestonesPanel";
 import { ColumnMappingPanel } from "./components/ColumnMappingPanel";
+import { ReviewChangesPanel } from "./components/ReviewChangesPanel";
 import { MilestoneDetailModal } from "./components/MilestoneDetailModal";
 import { exportAsImage, exportAsPdf } from "./lib/exportImage";
 import { headerSignature } from "./lib/columnMapping";
@@ -21,12 +22,14 @@ function App() {
   const [showOptions, setShowOptions] = useState(false);
   const [showManage, setShowManage] = useState(false);
   const [showMapping, setShowMapping] = useState(false);
+  const [showReview, setShowReview] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
   const hasData = data.snapshots.length > 0;
   const clampedIndex = Math.min(activeSnapshotIndex, Math.max(0, data.snapshots.length - 1));
+  const pendingReviewCount = data.newCandidates.length + data.removalCandidates.length;
 
   const handleExport = async (kind: "pdf" | "png" | "jpeg") => {
     if (!exportRef.current) return;
@@ -58,6 +61,14 @@ function App() {
           </div>
           {hasData && (
             <div className="relative flex flex-wrap items-center gap-2">
+              {pendingReviewCount > 0 && (
+                <button
+                  onClick={() => setShowReview(true)}
+                  className="rounded-md border border-accent bg-blue-50 px-3 py-2 text-sm font-medium text-accent hover:bg-blue-100"
+                >
+                  Review changes ({pendingReviewCount})
+                </button>
+              )}
               <button
                 onClick={() => setShowManage(true)}
                 className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink hover:bg-gray-50"
@@ -161,7 +172,11 @@ function App() {
             />
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <SnapshotList snapshots={data.snapshots} onRemove={data.removeSnapshot} />
+              <SnapshotList
+                snapshots={data.snapshots}
+                onRemove={data.removeSnapshot}
+                onUseAsMaster={data.useSnapshotAsMaster}
+              />
               <div className="flex flex-col items-end gap-2">
                 <UploadDropzone onFiles={data.addFiles} compact />
                 <FolderConnect
@@ -194,7 +209,21 @@ function App() {
         <ManageMilestonesPanel
           summaries={data.milestoneSummaries}
           onSetOverride={data.setOverride}
+          onUnfreeze={data.unfreezeMilestone}
           onClose={() => setShowManage(false)}
+        />
+      )}
+
+      {showReview && (
+        <ReviewChangesPanel
+          newCandidates={data.newCandidates}
+          removalCandidates={data.removalCandidates}
+          onAddCandidate={data.addCandidateToMaster}
+          onIgnoreCandidate={data.ignoreCandidate}
+          onRemove={data.removeFromMaster}
+          onKeepTracking={data.keepTrackingItem}
+          onFreeze={data.freezeMilestone}
+          onClose={() => setShowReview(false)}
         />
       )}
 

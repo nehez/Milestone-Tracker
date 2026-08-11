@@ -22,14 +22,14 @@ import {
   buildRows,
 } from "./TimelineRows";
 import { MovementGhost } from "./MovementGhost";
-import type { DisplayOptions, Milestone, Snapshot } from "../types";
+import type { DisplayOptions, Milestone, MilestoneOverride, Snapshot } from "../types";
 
 interface Props {
   milestones: Milestone[];
   snapshots: Snapshot[];
   activeSnapshotIndex: number;
   displayOptions: DisplayOptions;
-  overrides: Record<string, boolean>;
+  overrides: Record<string, MilestoneOverride>;
   onSelectMilestone: (milestone: Milestone) => void;
 }
 

@@ -7,15 +7,17 @@ export interface MilestoneSummary {
   date: string | null;
   flagged: boolean;
   override: boolean | undefined;
+  frozen: boolean;
 }
 
 interface Props {
   summaries: MilestoneSummary[];
   onSetOverride: (uid: string, visible: boolean | undefined) => void;
+  onUnfreeze: (uid: string) => void;
   onClose: () => void;
 }
 
-export function ManageMilestonesPanel({ summaries, onSetOverride, onClose }: Props) {
+export function ManageMilestonesPanel({ summaries, onSetOverride, onUnfreeze, onClose }: Props) {
   const [search, setSearch] = useState("");
   const [showAll, setShowAll] = useState(false);
 
@@ -100,7 +102,15 @@ export function ManageMilestonesPanel({ summaries, onSetOverride, onClose }: Pro
                     <div className="truncate text-ink">{s.name}</div>
                     <div className="text-xs text-slate">
                       {formatDate(s.date)}
-                      {s.override !== undefined && (
+                      {s.frozen && (
+                        <span className="ml-2 text-slate" title="Not pulling further updates — showing its last known state">
+                          ❄ frozen &middot;{" "}
+                          <button className="underline" onClick={() => onUnfreeze(s.uid)}>
+                            unfreeze
+                          </button>
+                        </span>
+                      )}
+                      {!s.frozen && s.override !== undefined && (
                         <span className="ml-2 text-accent">
                           overridden &middot;{" "}
                           <button
