@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { formatDate } from "../lib/dateScale";
-import type { DisplayOptions } from "../types";
+import type { DisplayOptions, MilestoneEntry } from "../types";
 import type { LaneGroup, MarkerData } from "./timelineShared";
 import {
   STATUS_COLOR,
@@ -152,6 +152,10 @@ interface Props {
   ticks: string[];
   todayIso: string;
   showToday: boolean;
+  /** What each tracked milestone actually looks like as of the active snapshot — a row
+   *  with no entry here is reserved (its lane/name-column slot exists) but has nothing
+   *  to draw yet, so it just shows the row shell until reached. */
+  liveEntryByUid: Map<string, MilestoneEntry>;
   onSelectMilestone: (milestone: MarkerData["milestone"]) => void;
 }
 
@@ -165,6 +169,7 @@ export function TimelineRowsChart({
   ticks,
   todayIso,
   showToday,
+  liveEntryByUid,
   onSelectMilestone,
 }: Props) {
   return (
@@ -225,11 +230,30 @@ export function TimelineRowsChart({
           }
 
           const m = row.marker!;
-          const { entry, status, deltaDays } = m;
+          const liveEntry = liveEntryByUid.get(m.milestone.uid);
+          if (!liveEntry) {
+            // Reserved row (name column + background already drawn) — nothing to plot
+            // until this milestone actually has data as of the active snapshot.
+            return (
+              <line
+                key={`sep-${row.key}`}
+                x1={0}
+                y1={row.top + row.height}
+                x2={width}
+                y2={row.top + row.height}
+                stroke="#f0f3f6"
+                strokeWidth={1}
+              />
+            );
+          }
+          const renderMarker: MarkerData = { ...m, entry: liveEntry };
+
+          const { status, deltaDays } = m;
+          const entry = liveEntry;
           const midY = row.top + row.height / 2;
           const color = STATUS_COLOR[status];
           const done = status === "done";
-          const bar = isBarMarker(m);
+          const bar = isBarMarker(renderMarker);
           const markerX = bar ? x(entry.startDate!) : x(entry.date!);
           const barWidth = bar ? Math.max(x(entry.date!) - x(entry.startDate!), 4) : 0;
           const fillWidth =
@@ -252,7 +276,7 @@ export function TimelineRowsChart({
           });
 
           const first = m.milestone.entries[0];
-          const showGhost = displayOptions.showMovement && hasMovement(m);
+          const showGhost = displayOptions.showMovement && hasMovement(renderMarker);
 
           // A pulled-in item's ghost sits to the right of its current marker (that's
           // where it used to be), the same side the trailing label normally goes —
@@ -268,10 +292,13 @@ export function TimelineRowsChart({
           const textX = ghostOnRight ? markerX - 10 : (bar ? markerX + barWidth : markerX) + 10;
 
           return (
-            <g
+            <motion.g
               key={row.key}
               onClick={() => onSelectMilestone(m.milestone)}
               className="cursor-pointer"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.35 }}
             >
               <rect x={0} y={row.top} width={width} height={row.height} fill="transparent" />
               <line
@@ -365,7 +392,7 @@ export function TimelineRowsChart({
                   </tspan>
                 )}
               </motion.text>
-            </g>
+            </motion.g>
           );
         })}
       </svg>

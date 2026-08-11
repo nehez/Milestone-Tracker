@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { addDays, clampZoom, daysBetween, formatDate, monthTicks } from "../lib/dateScale";
 import { entryForSnapshot } from "../lib/scrubber";
-import { isEntryVisible, statusOf } from "../lib/milestones";
+import { isEntryVisible, latestEntry, statusOf } from "../lib/milestones";
 import {
   STATUS_COLOR,
   hasMovement,
@@ -22,7 +22,7 @@ import {
   buildRows,
 } from "./TimelineRows";
 import { MovementGhost } from "./MovementGhost";
-import type { DisplayOptions, Milestone, MilestoneOverride, Snapshot } from "../types";
+import type { DisplayOptions, Milestone, MilestoneEntry, MilestoneOverride, Snapshot } from "../types";
 
 interface Props {
   milestones: Milestone[];
@@ -69,17 +69,34 @@ export function Timeline({
   const containerRef = useRef<HTMLDivElement>(null);
   const activeSnapshot = snapshots[activeSnapshotIndex];
 
-  const markers = useMemo<MarkerData[]>(() => {
-    if (!activeSnapshot) return [];
+  // STABLE: one entry per currently-tracked milestone, using its most recent data for
+  // layout (grouping, band position) — so lanes/rows don't reflow as items enter the
+  // animation. Only whether a milestone counts (override/flag/milestonesOnly) changes
+  // this set, never which snapshot happens to be active.
+  const trackedMarkers = useMemo<MarkerData[]>(() => {
     return milestones
       .map((m) => {
-        const entry = entryForSnapshot(m, snapshots, activeSnapshotIndex);
+        const entry = latestEntry(m);
         if (!entry || !entry.date) return null;
         if (!isEntryVisible(m.uid, entry.isMilestone, displayOptions.milestonesOnly, overrides)) return null;
         return { milestone: m, entry, ...statusOf(m) };
       })
       .filter((x): x is MarkerData => x !== null);
-  }, [milestones, snapshots, activeSnapshotIndex, activeSnapshot, displayOptions.milestonesOnly, overrides]);
+  }, [milestones, displayOptions.milestonesOnly, overrides]);
+
+  // LIVE: what each tracked milestone actually looks like as of the active snapshot —
+  // absent if it doesn't exist yet at this point in time. Its row/lane slot is already
+  // reserved via trackedMarkers, so it just fades in once reached rather than the whole
+  // layout jumping the instant it first appears.
+  const liveEntryByUid = useMemo(() => {
+    const map = new Map<string, MilestoneEntry>();
+    if (!activeSnapshot) return map;
+    for (const tm of trackedMarkers) {
+      const entry = entryForSnapshot(tm.milestone, snapshots, activeSnapshotIndex);
+      if (entry && entry.date) map.set(tm.milestone.uid, entry);
+    }
+    return map;
+  }, [trackedMarkers, snapshots, activeSnapshotIndex, activeSnapshot]);
 
   const domain = useMemo(() => {
     const allDates = milestones.flatMap((m) => m.entries.map((e) => e.date)).filter(Boolean) as string[];
@@ -97,9 +114,9 @@ export function Timeline({
   const x = (iso: string) => daysBetween(domain.start, iso) * pxPerDay;
 
   const lanes = useMemo<LaneGroup[]>(() => {
-    const grouped = markers.some((m) => m.entry.group);
+    const grouped = trackedMarkers.some((m) => m.entry.group);
     const buckets = new Map<string, MarkerData[]>();
-    for (const m of markers) {
+    for (const m of trackedMarkers) {
       const key = grouped ? m.entry.group ?? "Ungrouped" : "";
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key)!.push(m);
@@ -124,13 +141,15 @@ export function Timeline({
       return { key, label: grouped ? key : null, markers: laneMarkers, bands, height, top, baselineY };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [markers, pxPerDay, domain.start]);
+  }, [trackedMarkers, pxPerDay, domain.start]);
 
   const isGrouped = lanes.length > 0 && lanes[0].label !== null;
   const laneBandColor = (i: number) =>
     displayOptions.laneBands ? displayOptions.laneBandColors[i % 2] : undefined;
 
-  const mode = resolveLayout(displayOptions.layout, markers);
+  // Based on the stable set too — flipping compact/rows layout mid-animation as items
+  // enter would be its own jarring reflow.
+  const mode = resolveLayout(displayOptions.layout, trackedMarkers);
   const rows = useMemo(
     () => (mode === "rows" ? buildRows(lanes, isGrouped) : []),
     [mode, lanes, isGrouped]
@@ -165,7 +184,7 @@ export function Timeline({
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <p className="text-xs text-slate">
-          {markers.length} of {milestones.length} item{milestones.length === 1 ? "" : "s"} shown &middot;{" "}
+          {liveEntryByUid.size} of {milestones.length} item{milestones.length === 1 ? "" : "s"} shown &middot;{" "}
           {activeSnapshot ? formatDate(activeSnapshot.date) : ""}
         </p>
         <div className="flex items-center gap-1">
@@ -265,6 +284,7 @@ export function Timeline({
               ticks={ticks}
               todayIso={todayIso}
               showToday={showToday}
+              liveEntryByUid={liveEntryByUid}
               onSelectMilestone={onSelectMilestone}
             />
           ) : (
@@ -307,12 +327,20 @@ export function Timeline({
                 <line x1={0} y1={lane.baselineY} x2={width} y2={lane.baselineY} stroke="#d0d7de" strokeWidth={2} />
 
                 {lane.markers.map((m) => {
-                  const { milestone, entry, status, deltaDays } = m;
+                  // The lane/band slot is reserved from the stable set regardless, but
+                  // there's nothing to draw until this milestone actually has data as of
+                  // the active snapshot — it fades in (below) the moment that happens.
+                  const liveEntry = liveEntryByUid.get(m.milestone.uid);
+                  if (!liveEntry) return null;
+                  const renderMarker: MarkerData = { ...m, entry: liveEntry };
+
+                  const { milestone, status, deltaDays } = m;
+                  const entry = liveEntry;
                   const band = lane.bands.get(milestone.uid) ?? 0;
                   const labelY = lane.baselineY + LANE_LABEL_GAP + band * BAND_HEIGHT;
                   const color = STATUS_COLOR[status];
                   const done = status === "done";
-                  const anchorX = markerAnchorX(m, x);
+                  const anchorX = markerAnchorX(renderMarker, x);
                   // Labels are wide (112px) relative to their anchor point, so a marker near
                   // either edge of the chart would center a label partly off-canvas. html2canvas
                   // doesn't reliably paint that overflow (unlike a live browser), so clamp the
@@ -321,7 +349,7 @@ export function Timeline({
                     Math.max(anchorX - LABEL_WIDTH / 2, LABEL_EDGE_PAD),
                     width - LABEL_WIDTH - LABEL_EDGE_PAD
                   );
-                  const dateText = isBarMarker(m)
+                  const dateText = isBarMarker(renderMarker)
                     ? `${formatDate(entry.startDate, false)} – ${formatDate(entry.date)}`
                     : formatDate(entry.date);
 
@@ -373,20 +401,23 @@ export function Timeline({
                     </motion.g>
                   );
 
-                  const showGhost = displayOptions.showMovement && hasMovement(m);
+                  const showGhost = displayOptions.showMovement && hasMovement(renderMarker);
                   const first = milestone.entries[0];
 
-                  if (isBarMarker(m)) {
+                  if (isBarMarker(renderMarker)) {
                     const xStart = x(entry.startDate!);
                     const xEnd = x(entry.date!);
                     const barWidth = Math.max(xEnd - xStart, 4);
                     const fillWidth =
                       entry.percentComplete !== null ? barWidth * (entry.percentComplete / 100) : barWidth;
                     return (
-                      <g
+                      <motion.g
                         key={milestone.uid}
                         onClick={() => onSelectMilestone(milestone)}
                         className="cursor-pointer"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.35 }}
                       >
                         {showGhost && first.startDate && first.date && (
                           <MovementGhost
@@ -419,15 +450,18 @@ export function Timeline({
                         />
                         {connector}
                         {labelGroup}
-                      </g>
+                      </motion.g>
                     );
                   }
 
                   return (
-                    <g
+                    <motion.g
                       key={milestone.uid}
                       onClick={() => onSelectMilestone(milestone)}
                       className="cursor-pointer"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.35 }}
                     >
                       {showGhost && first.date && (
                         <MovementGhost
@@ -454,7 +488,7 @@ export function Timeline({
                       </motion.g>
                       {connector}
                       {labelGroup}
-                    </g>
+                    </motion.g>
                   );
                 })}
               </g>
