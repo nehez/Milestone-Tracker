@@ -370,7 +370,9 @@ export function useAppData() {
     [mappings]
   );
 
-  /** One row per unique UID for the "Manage milestones" picker, using each milestone's most recent snapshot. */
+  /** One row per unique UID for the browse/track table, using each milestone's most
+   *  recent snapshot — carries every column the table can show (group, % complete,
+   *  extra fields), not just what a simple checkbox list needed. */
   const milestoneSummaries = useMemo(
     () =>
       milestones
@@ -380,9 +382,12 @@ export function useAppData() {
             uid: m.uid,
             name: latest?.name || "(untitled)",
             date: latest?.date ?? null,
+            group: latest?.group ?? null,
+            percentComplete: latest?.percentComplete ?? null,
             flagged: latest?.isMilestone ?? true,
             override: overrides[m.uid]?.visible,
             frozen: Boolean(overrides[m.uid]?.frozenAtSnapshotId),
+            extra: latest?.extra ?? {},
           };
         })
         .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999")),

@@ -7,7 +7,7 @@ import { SnapshotList } from "./components/SnapshotList";
 import { Timeline } from "./components/Timeline";
 import { Scrubber } from "./components/Scrubber";
 import { DisplayOptionsPanel } from "./components/DisplayOptionsPanel";
-import { ManageMilestonesPanel } from "./components/ManageMilestonesPanel";
+import { MilestoneBrowserPanel } from "./components/MilestoneBrowserPanel";
 import { ColumnMappingPanel } from "./components/ColumnMappingPanel";
 import { ReviewChangesPanel } from "./components/ReviewChangesPanel";
 import { BackupPanel } from "./components/BackupPanel";
@@ -82,7 +82,7 @@ function App() {
                 onClick={() => setShowManage(true)}
                 className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink hover:bg-gray-50"
               >
-                Manage milestones
+                Browse &amp; track
               </button>
               <button
                 onClick={() => setShowMapping(true)}
@@ -216,7 +216,7 @@ function App() {
       ))}
 
       {showManage && (
-        <ManageMilestonesPanel
+        <MilestoneBrowserPanel
           summaries={data.milestoneSummaries}
           onSetOverride={data.setOverride}
           onUnfreeze={data.unfreezeMilestone}
