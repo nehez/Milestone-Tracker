@@ -10,6 +10,7 @@ import { DisplayOptionsPanel } from "./components/DisplayOptionsPanel";
 import { ManageMilestonesPanel } from "./components/ManageMilestonesPanel";
 import { ColumnMappingPanel } from "./components/ColumnMappingPanel";
 import { ReviewChangesPanel } from "./components/ReviewChangesPanel";
+import { BackupPanel } from "./components/BackupPanel";
 import { MilestoneDetailModal } from "./components/MilestoneDetailModal";
 import { exportAsImage, exportAsPdf } from "./lib/exportImage";
 import { headerSignature } from "./lib/columnMapping";
@@ -23,6 +24,7 @@ function App() {
   const [showManage, setShowManage] = useState(false);
   const [showMapping, setShowMapping] = useState(false);
   const [showReview, setShowReview] = useState(false);
+  const [showBackup, setShowBackup] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null);
   const exportRef = useRef<HTMLDivElement>(null);
@@ -59,8 +61,15 @@ function App() {
             </div>
             <p className="text-xs text-slate">Everything stays in this browser &mdash; nothing is uploaded.</p>
           </div>
-          {hasData && (
-            <div className="relative flex flex-wrap items-center gap-2">
+          <div className="relative flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setShowBackup(true)}
+              className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink hover:bg-gray-50"
+            >
+              Backup &amp; restore
+            </button>
+            {hasData && (
+              <>
               {pendingReviewCount > 0 && (
                 <button
                   onClick={() => setShowReview(true)}
@@ -120,8 +129,9 @@ function App() {
               >
                 Clear data
               </button>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -233,6 +243,14 @@ function App() {
           snapshots={data.snapshots}
           onUpdateMapping={data.updateMapping}
           onClose={() => setShowMapping(false)}
+        />
+      )}
+
+      {showBackup && (
+        <BackupPanel
+          onExport={data.exportData}
+          onImport={data.importData}
+          onClose={() => setShowBackup(false)}
         />
       )}
 

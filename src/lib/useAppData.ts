@@ -4,6 +4,8 @@ import {
   clearFolderHandle,
   deleteOverride,
   deleteSnapshot,
+  exportAllData,
+  importAllData,
   loadFolderHandle,
   loadMapping,
   loadOverrides,
@@ -16,6 +18,7 @@ import {
   saveReviewFlag,
   saveSettings,
   saveSnapshot,
+  type ExportedData,
 } from "./db";
 import { parseExcelFile } from "./excel";
 import { headerSignature } from "./columnMapping";
@@ -59,31 +62,32 @@ export function useAppData() {
   const [folderPermission, setFolderPermission] = useState<PermissionState | null>(null);
   const [folderScanning, setFolderScanning] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const [snaps, settings, savedOverrides, savedReviewFlags] = await Promise.all([
-        loadSnapshots(),
-        loadSettings(),
-        loadOverrides(),
-        loadReviewFlags(),
-      ]);
-      setSnapshots(snaps);
-      // Merge over defaults so settings saved before a new option existed still load.
-      if (settings) setDisplayOptions({ ...DEFAULT_DISPLAY_OPTIONS, ...settings.displayOptions });
-      setOverrides(Object.fromEntries(savedOverrides.map((o) => [o.uid, o])));
-      setReviewFlags(Object.fromEntries(savedReviewFlags.map((f) => [f.uid, f])));
+  // Pulls current IndexedDB state into React state — used on mount, and again after an
+  // import merges new data in, so the app reflects it without a page reload.
+  const loadAllFromDb = useCallback(async () => {
+    const [snaps, settings, savedOverrides, savedReviewFlags] = await Promise.all([
+      loadSnapshots(),
+      loadSettings(),
+      loadOverrides(),
+      loadReviewFlags(),
+    ]);
+    setSnapshots(snaps);
+    // Merge over defaults so settings saved before a new option existed still load.
+    if (settings) setDisplayOptions({ ...DEFAULT_DISPLAY_OPTIONS, ...settings.displayOptions });
+    setOverrides(Object.fromEntries(savedOverrides.map((o) => [o.uid, o])));
+    setReviewFlags(Object.fromEntries(savedReviewFlags.map((f) => [f.uid, f])));
 
-      const uniqueSignatures = new Set(
-        snaps.map((s) => headerSignature(s.headers))
-      );
-      const entries = await Promise.all(
-        [...uniqueSignatures].map(async (sig) => [sig, await loadMapping(sig)] as const)
-      );
-      const map: Record<string, ColumnMapping> = {};
-      for (const [sig, mapping] of entries) if (mapping) map[sig] = mapping;
-      setMappings(map);
-      setLoaded(true);
-    })();
+    const uniqueSignatures = new Set(snaps.map((s) => headerSignature(s.headers)));
+    const entries = await Promise.all(
+      [...uniqueSignatures].map(async (sig) => [sig, await loadMapping(sig)] as const)
+    );
+    const map: Record<string, ColumnMapping> = {};
+    for (const [sig, mapping] of entries) if (mapping) map[sig] = mapping;
+    setMappings(map);
+  }, []);
+
+  useEffect(() => {
+    void loadAllFromDb().then(() => setLoaded(true));
 
     // A directory handle survives IndexedDB across reloads, but the browser always
     // re-checks permission on each page load rather than remembering "granted" — so
@@ -234,6 +238,41 @@ export function useAppData() {
     setPendingUploads([]);
   }, []);
 
+  /** Downloads everything as one JSON file — the portability mechanism for moving
+   *  tracked data to another device without any server in between: the same page is
+   *  already reachable from anywhere, this file is just how its data travels. */
+  const exportData = useCallback(async () => {
+    const data = await exportAllData();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `milestone-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  /** Merges a backup file into whatever's already on this device. Throws on a malformed
+   *  file so the caller (BackupPanel) can show the error inline rather than it vanishing
+   *  into the general error banner behind the modal. */
+  const importData = useCallback(
+    async (file: File) => {
+      const text = await file.text();
+      let data: ExportedData;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("That file isn't valid JSON.");
+      }
+      if (!data || typeof data !== "object" || !Array.isArray(data.snapshots)) {
+        throw new Error("That doesn't look like a Milestone Tracker backup file.");
+      }
+      await importAllData(data);
+      await loadAllFromDb();
+    },
+    [loadAllFromDb]
+  );
+
   const milestonesRaw = useMemo(() => buildMilestones(snapshots, mappings), [snapshots, mappings]);
 
   /** Pin a milestone's visibility, overriding whatever its spreadsheet flag says. Pass
@@ -370,6 +409,8 @@ export function useAppData() {
     updateMapping,
     removeSnapshot,
     clearAll,
+    exportData,
+    importData,
     error,
     setError,
     isFolderPickerSupported: isFolderPickerSupported(),

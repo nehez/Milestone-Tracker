@@ -131,3 +131,48 @@ export async function clearAllData(): Promise<void> {
     db.clear("reviewFlags"),
   ]);
 }
+
+/** Everything portable between devices — the folder handle isn't included since a
+ *  directory picker permission can't be serialized or meaningfully reused elsewhere. */
+export interface ExportedData {
+  version: 1;
+  exportedAt: string;
+  snapshots: Snapshot[];
+  mappings: ColumnMapping[];
+  overrides: MilestoneOverride[];
+  reviewFlags: ReviewFlag[];
+  settings: AppSettings | null;
+}
+
+export async function exportAllData(): Promise<ExportedData> {
+  const db = await getDb();
+  const [snapshots, mappings, overrides, reviewFlags, settings] = await Promise.all([
+    db.getAll("snapshots"),
+    db.getAll("mappings"),
+    db.getAll("overrides"),
+    db.getAll("reviewFlags"),
+    db.get("settings", "app-settings"),
+  ]);
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    snapshots,
+    mappings,
+    overrides,
+    reviewFlags,
+    settings: settings ?? null,
+  };
+}
+
+/** Merges (upserts) into whatever's already on this device rather than replacing it —
+ *  importing the same backup twice, or combining backups from two devices, is safe. */
+export async function importAllData(data: ExportedData): Promise<void> {
+  const db = await getDb();
+  await Promise.all([
+    ...data.snapshots.map((s) => db.put("snapshots", s)),
+    ...data.mappings.map((m) => db.put("mappings", m)),
+    ...data.overrides.map((o) => db.put("overrides", o)),
+    ...data.reviewFlags.map((f) => db.put("reviewFlags", f)),
+    data.settings ? db.put("settings", data.settings, "app-settings") : Promise.resolve(),
+  ]);
+}
